@@ -955,7 +955,7 @@ version = "0.8.4"
 
 [[deps.MBD]]
 deps = ["CSV", "Combinatorics", "DataFrames", "DifferentialEquations", "LightXML", "LinearAlgebra", "SPICE", "StaticArrays", "UpdateJulia"]
-git-tree-sha1 = "23a1535065895d9741508b164436f290d0742ece"
+git-tree-sha1 = "194299157e9cc8e648105268c7f7a00ecbd0570c"
 repo-rev = "richmo11-memoryChanges"
 repo-url = "https://github.com/JonathanRichmond/MBD.jl.git"
 uuid = "994ce0ec-d6e5-428b-b4b3-7b10f5a0848a"
