@@ -8,7 +8,7 @@ U: 2/17/25
 module EML1Lyap
 println()
 
-using MBD
+using MBD, MATLAB
 
 include("../Targeters/PlanarPerpJC.jl")
 include("../Utilities/Export.jl")
@@ -16,8 +16,8 @@ include("../Utilities/Export.jl")
 systemData = MBD.CR3BPSystemData("Earth", "Moon")
 dynamicsModel = MBD.CR3BPDynamicsModel(systemData)
 
-Earth = MBD.BodyData("Earth")
-Moon = MBD.BodyData("Moon")
+Earth = systemData.primaryData[1]
+Moon = systemData.primaryData[2]
 L1::Vector{Float64} = getEquilibriumPoint(dynamicsModel, 1)
 L2::Vector{Float64} = getEquilibriumPoint(dynamicsModel, 2)
 L3::Vector{Float64} = getEquilibriumPoint(dynamicsModel, 3)
@@ -54,13 +54,16 @@ for s::Int64 in 1:getNumMembers(solutions)
     push!(family.monodromies, orbit.monodromy)
 end
 eigenSort!(family)
+
 # exportData(family, "FamilyData/EML1Lyapunovs.csv")
 
 println("\nTesting interpolation...")
 testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/EML1Lyapunovs.csv", "JC", 3.0)
 println("\nTest Orbit:\n\tState:$(testOrbit.initialCondition)\n\tPeriod: $(testOrbit.period)\n\tJC: $(getJacobiConstant(testOrbit))")
 
-exportCR3BPOrbit(testOrbit, dynamicsModel, "CR3BPTraj.mat")
+mf = MATLAB.MatFile("Output/CR3BPTraj.mat", "w")
+exportCR3BPOrbit(testOrbit, dynamicsModel, mf)
+MATLAB.close(mf)
 
 println()
 end
