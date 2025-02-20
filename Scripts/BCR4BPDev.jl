@@ -30,17 +30,17 @@ CR3BPOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, "FamilyData/EML1
 println("\nCR3BP Orbit:\n\tState:$(CR3BPOrbit.initialCondition)\n\tPeriod: $(CR3BPOrbit.period)\n\tJC: $(getJacobiConstant(CR3BPOrbit))\n\tStability: $(getStabilityIndex(CR3BPOrbit))")
 
 propagator = MBD.Propagator()
-arcEM::MBD.BCR4BP12Arc = propagate(propagator, push!(copy(CR3BPOrbit.initialCondition), pi*3/2), collect(range(0, 1.5*CR3BPOrbit.period, 1001)), EMDynamicsModel)
-nStatesEM::Int64 = getStateCount(arcEM)
-xEM::Vector{Float64} = zeros(Float64, nStatesEM)
-yEM::Vector{Float64} = zeros(Float64, nStatesEM)
-zEM::Vector{Float64} = zeros(Float64, nStatesEM)
-xdotEM::Vector{Float64} = zeros(Float64, nStatesEM)
-ydotEM::Vector{Float64} = zeros(Float64, nStatesEM)
-zdotEM::Vector{Float64} = zeros(Float64, nStatesEM)
-thetaSEM::Vector{Float64} = zeros(Float64, nStatesEM)
-tEM::Vector{Float64} = zeros(Float64, nStatesEM)
-for s::Int64 in 1:nStatesEM
+arcEM::MBD.BCR4BP12Arc = propagate(propagator, push!(copy(CR3BPOrbit.initialCondition), 0.0), collect(range(0, 1.5*CR3BPOrbit.period, 1001)), EMDynamicsModel)
+nStates::Int64 = getStateCount(arcEM)
+xEM::Vector{Float64} = zeros(Float64, nStates)
+yEM::Vector{Float64} = zeros(Float64, nStates)
+zEM::Vector{Float64} = zeros(Float64, nStates)
+xdotEM::Vector{Float64} = zeros(Float64, nStates)
+ydotEM::Vector{Float64} = zeros(Float64, nStates)
+zdotEM::Vector{Float64} = zeros(Float64, nStates)
+thetaSEM::Vector{Float64} = zeros(Float64, nStates)
+tEM::Vector{Float64} = zeros(Float64, nStates)
+for s::Int64 in 1:nStates
     state::Vector{Float64} = getStateByIndex(arcEM, s)
     xEM[s] = state[1]
     yEM[s] = state[2]
@@ -52,9 +52,28 @@ for s::Int64 in 1:nStatesEM
     tEM[s] = getTimeByIndex(arcEM, s)
 end
 
+(statesSB1::Vector{Vector{Float64}}, tSB1::Vector{Float64}) = rotating122Rotating41(EMDynamicsModel, arcEM.states, arcEM.times)
+xSB1::Vector{Float64} = zeros(Float64, nStates)
+ySB1::Vector{Float64} = zeros(Float64, nStates)
+zSB1::Vector{Float64} = zeros(Float64, nStates)
+xdotSB1::Vector{Float64} = zeros(Float64, nStates)
+ydotSB1::Vector{Float64} = zeros(Float64, nStates)
+zdotSB1::Vector{Float64} = zeros(Float64, nStates)
+thetaMSB1::Vector{Float64} = zeros(Float64, nStates)
+for s::Int64 in 1:nStates
+    xSB1[s] = statesSB1[s][1]
+    ySB1[s] = statesSB1[s][2]
+    zSB1[s] = statesSB1[s][3]
+    xdotSB1[s] = statesSB1[s][4]
+    ydotSB1[s] = statesSB1[s][5]
+    zdotSB1[s] = statesSB1[s][6]
+    thetaMSB1[s] = statesSB1[s][7]
+end
+
 mf = MATLAB.MatFile("Output/BCR4BPDev.mat", "w")
-exportCR3BPOrbit(CR3BPOrbit, CR3BPDynamicsModel, mf)
-exportBCR4BP12Trajectory(xEM, yEM, zEM, xdotEM, ydotEM, zdotEM, thetaSEM, tEM, mf)
+exportCR3BPOrbit(CR3BPOrbit, CR3BPDynamicsModel, mf, :orbitCR3BP)
+exportBCR4BP12Trajectory(xEM, yEM, zEM, xdotEM, ydotEM, zdotEM, thetaSEM, tEM, mf, :trajBCR4BP12)
+exportBCR4BP41Trajectory(xSB1, ySB1, zSB1, xdotSB1, ydotSB1, zdotSB1, thetaMSB1, tSB1, mf, :trajBCR4BP41)
 MATLAB.close(mf)
 
 println()
