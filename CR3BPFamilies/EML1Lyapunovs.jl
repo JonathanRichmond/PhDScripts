@@ -62,7 +62,7 @@ testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/EML1Lyapun
 println("\nTest Orbit:\n\tState:$(testOrbit.initialCondition)\n\tPeriod: $(testOrbit.period)\n\tJC: $(getJacobiConstant(testOrbit))")
 
 mf = MATLAB.MatFile("Output/CR3BPTraj.mat", "w")
-exportCR3BPOrbit(testOrbit, dynamicsModel, mf, :L1Lyapunov)
+exportCR3BPOrbit(testOrbit, dynamicsModel, mf, :trajCR3BP)
 MATLAB.close(mf)
 
 println()

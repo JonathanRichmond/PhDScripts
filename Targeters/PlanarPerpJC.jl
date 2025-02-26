@@ -3,6 +3,7 @@ Jacobi constant perpendicular crossing targeter for planar orbits
 
 Author: Jonathan Richmond
 C: 2/4/25
+U: 2/26/25
 """
 
 using MBD, CSV, DataFrames, LinearAlgebra, StaticArrays
@@ -52,17 +53,12 @@ function correct(targeter::PlanarPerpJCTargeter, q0::Vector{Float64}, tSpan::Vec
     segment = MBD.CR3BPSegment(halfPeriodGuess, originNode, terminalNode)
     problem = MBD.CR3BPMultipleShooterProblem()
     addSegment!(problem, segment)
-    continuityCons = MBD.CR3BPContinuityConstraint(segment)
-    JCCons = MBD.JacobiConstraint(originNode, targetJC)
-    PCCons = MBD.CR3BPStateConstraint(terminalNode, [2, 4], [0.0, 0.0])
-    addConstraint!(problem, continuityCons)
-    addConstraint!(problem, JCCons)
-    addConstraint!(problem, PCCons)
+    addConstraint!(problem, MBD.CR3BPContinuityConstraint(segment))
+    addConstraint!(problem, MBD.JacobiConstraint(originNode, targetJC))
+    addConstraint!(problem, MBD.CR3BPStateConstraint(terminalNode, [2, 4], [0.0, 0.0]))
     shooter = MBD.CR3BPMultipleShooter(tol)
+    # shooter.printProgress = true
     solution::MBD.CR3BPMultipleShooterProblem = MBD.solve!(shooter, problem)
-    for cons::MBD.AbstractConstraint in getConstraints(solution)
-        (LinearAlgebra.norm(evaluateConstraint(cons, getFreeVariableIndexMap!(solution), getFreeVariableVector!(solution))) > shooter.convergenceCheck.maxVectorNorm) && throw(ErrorException("Targeter failed to converge to $tol for $(typeof(cons))"))
-    end
 
     return solution
 end

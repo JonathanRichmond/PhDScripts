@@ -119,5 +119,10 @@ exportBCR4BP41Trajectory(xSB1_v, ySB1_v, zSB1_v, xdotSB1_v, ydotSB1_v, zdotSB1_v
 exportBCR4BP12Trajectory(xEM_v, yEM_v, zEM_v, xdotEM_v, ydotEM_v, zdotEM_v, thetaSEM_v, tEM_v, mf, :validBCR4BPEM)
 MATLAB.close(mf)
 
+propagatorSTM = MBD.Propagator(equationType = MBD.STM)
+arcSTM::MBD.BCR4BP12Arc = propagate(propagatorSTM, appendExtraInitialConditions(EMDynamicsModel, push!(copy(CR3BPOrbit.initialCondition), 0.0), MBD.STM), [0, 0.01], EMDynamicsModel)
+analyticalSTM::Matrix{Float64} = reshape(getStateByIndex(arcSTM, -1)[8:56], (7,7))
+println(analyticalSTM)
+
 println()
 end
