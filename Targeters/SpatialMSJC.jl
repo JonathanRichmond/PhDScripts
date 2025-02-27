@@ -57,6 +57,7 @@ function correct(targeter::SpatialMSJCTargeter, q0::Vector{Float64}, tSpan::Vect
     checkJacobian(problem)
     shooter = MBD.CR3BPMultipleShooter(tol)
     shooter.printProgress = true
+    shooter.maxIterations = 50
     solution::MBD.CR3BPMultipleShooterProblem = MBD.solve!(shooter, problem)
 
     return solution
