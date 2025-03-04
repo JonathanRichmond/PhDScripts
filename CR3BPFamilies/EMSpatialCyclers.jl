@@ -4,13 +4,14 @@ Script for Earth-Moon CR3BP spatial cycler orbit family
 
 Author: Jonathan Richmond
 C: 2/26/25
+U: 3/4/25
 """
 module EMSCycler
 println()
 
 using MBD, MATLAB
 
-include("../Targeters/SpatialMSJC.jl")
+include("../Targeters/SpatialPerpJCMS.jl")
 include("../Utilities/Export.jl")
 
 systemData = MBD.CR3BPSystemData("Earth", "Moon")
@@ -24,13 +25,13 @@ L3::Vector{Float64} = getEquilibriumPoint(dynamicsModel, 3)
 L4::Vector{Float64} = getEquilibriumPoint(dynamicsModel, 4)
 L5::Vector{Float64} = getEquilibriumPoint(dynamicsModel, 5)
 
-targeter = SpatialMSJCTargeter(dynamicsModel)
+targeter = SpatialPerpJCMSTargeter(dynamicsModel)
 
-initialStateGuess::Vector{Float64} = [0.83264753, 0, 0.08783491, 0, 0.17180076, 0]
-tSpanGuess::Vector{Float64} = [0, 6.791174139338501]
-targetJC::Float64 = getJacobiConstant(dynamicsModel, initialStateGuess)
-numNodes::Int64 = 4
-solution1::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numNodes, targetJC, 1E-10)
+initialStateGuess::Vector{Float64} = [0.8327, 0, 0.08783, 0, 0.1718, 0]
+tSpanGuess::Vector{Float64} = [0, 6.7911]
+targetJC::Float64 = 3.12618
+numNodes::Int64 = 6
+solution1::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numNodes, targetJC)
 println("Converged Orbit 1:\n\tState:$(solution1.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution1))\n\tJC: $(getJacobiConstant(dynamicsModel, solution1.nodes[1].state.data[1:6]))")
 
 # solution2::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess+[0, 0, 0.0001, 0, 0, 0], tSpanGuess, 2, targetJC-1E-5, 1E-10)
@@ -39,7 +40,7 @@ println("Converged Orbit 1:\n\tState:$(solution1.nodes[1].state.data[1:6])\n\tPe
 exportSolution::MBD.CR3BPMultipleShooterProblem = solution1
 propagator = MBD.Propagator()
 mf = MATLAB.MatFile("Output/CR3BPTraj.mat", "w")
-for s::Int64 = 1:numNodes
+for s::Int64 = 1:numNodes/2
     elapsedT::Float64 = 0.0
     if s > 1
         for j::Int64 = 2:s
@@ -66,6 +67,37 @@ for s::Int64 = 1:numNodes
         t[j] = getTimeByIndex(arc, j)
     end
     exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, mf, Symbol("trajCR3BP"*string(s)))
+end
+for s::Int64 = 1:numNodes/2
+    elapsedT::Float64 = 0.0
+    for j = 1:length(exportSolution.segments)
+        elapsedT += exportSolution.segments[j].TOF.data[1]
+    end
+    if s > 1
+        for j::Int64 = 2:s
+            elapsedT += exportSolution.segments[end+2-s].TOF.data[1]
+        end
+    end
+    arc::MBD.CR3BPArc = propagate(propagator, exportSolution.nodes[end-s].state.data[1:6].*[1, -1, 1, -1, 1, -1], [elapsedT+exportSolution.segments[end+1-s].TOF.data[1], elapsedT], dynamicsModel)
+    nStates::Int64 = getStateCount(arc)
+    x::Vector{Float64} = zeros(Float64, nStates)
+    y::Vector{Float64} = zeros(Float64, nStates)
+    z::Vector{Float64} = zeros(Float64, nStates)
+    xdot::Vector{Float64} = zeros(Float64, nStates)
+    ydot::Vector{Float64} = zeros(Float64, nStates)
+    zdot::Vector{Float64} = zeros(Float64, nStates)
+    t::Vector{Float64} = zeros(Float64, nStates)
+    for j::Int64 in 1:nStates
+        state::Vector{Float64} = getStateByIndex(arc, j)
+        x[j] = state[1]
+        y[j] = state[2]
+        z[j] = state[3]
+        xdot[j] = state[4]
+        ydot[j] = state[5]
+        zdot[j] = state[6]
+        t[j] = getTimeByIndex(arc, j)
+    end
+    exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, mf, Symbol("trajCR3BP"*string(s+numNodes)))
 end
 MATLAB.close(mf)
 
