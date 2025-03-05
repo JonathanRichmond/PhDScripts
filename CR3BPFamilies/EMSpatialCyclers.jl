@@ -27,11 +27,11 @@ L5::Vector{Float64} = getEquilibriumPoint(dynamicsModel, 5)
 
 targeter = SpatialPerpJCMSTargeter(dynamicsModel)
 
-initialStateGuess::Vector{Float64} = [0.8327, 0, 0.08783, 0, 0.1718, 0]
-tSpanGuess::Vector{Float64} = [0, 6.7911]
-targetJC::Float64 = 3.12618
-numNodes::Int64 = 6
-solution1::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numNodes, targetJC)
+initialStateGuess::Vector{Float64} = [0.881995215402004, 0, -0.240359794585737, 0, 0.144857650067854, 0] # [0.8327, 0, 0.08783, 0, 0.1718, 0]
+tSpanGuess::Vector{Float64} = [0, 20.375575066948642] # [0, 6.7911]
+targetJC::Float64 = 2.9833
+numNodes::Int64 = 14
+solution1::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numNodes, targetJC, 1E-10)
 println("Converged Orbit 1:\n\tState:$(solution1.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution1))\n\tJC: $(getJacobiConstant(dynamicsModel, solution1.nodes[1].state.data[1:6]))")
 
 # solution2::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess+[0, 0, 0.0001, 0, 0, 0], tSpanGuess, 2, targetJC-1E-5, 1E-10)
