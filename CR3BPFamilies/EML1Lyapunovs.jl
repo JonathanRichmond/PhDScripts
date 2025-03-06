@@ -3,7 +3,7 @@ Script for Earth-Moon CR3BP L1 Lyapunov orbit family
 
 Author: Jonathan Richmond
 C: 2/4/25
-U: 2/17/25
+U: 3/6/25
 """
 module EML1Lyap
 println()
@@ -59,7 +59,7 @@ eigenSort!(family)
 
 println("\nTesting interpolation...")
 testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/EML1Lyapunovs.csv", "JC", 3.0)
-println("\nTest Orbit:\n\tState:$(testOrbit.initialCondition)\n\tPeriod: $(testOrbit.period)\n\tJC: $(getJacobiConstant(testOrbit))")
+println("\nTest Orbit:\n\tState:$(testOrbit.initialCondition)\n\tPeriod: $(testOrbit.period)\n\tJC: $(getJacobiConstant(testOrbit))\n\tStability Index: $(getStabilityIndex(testOrbit))")
 
 mf = MATLAB.MatFile("Output/CR3BPTraj.mat", "w")
 exportCR3BPOrbit(testOrbit, dynamicsModel, mf, :trajCR3BP)

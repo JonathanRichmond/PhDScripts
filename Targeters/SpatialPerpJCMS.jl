@@ -3,7 +3,7 @@ Jacobi constant perpendicular crossing multiple shooter for spatial orbits
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 3/4/25
+U: 3/6/25
 """
 
 using MBD, CSV, DataFrames, LinearAlgebra, StaticArrays
@@ -30,7 +30,7 @@ struct SpatialPerpJCMSTargeter <: MBD.AbstractTargeter
 end
 
 """
-    correct(targeter, q0, tSpan, numNodes, targetJC; tol)
+    correct(targeter, q0, tSpan, numSegs, targetJC; tol)
 
 Return corrected CR3BP multiple shooter problem object
 
@@ -38,24 +38,24 @@ Return corrected CR3BP multiple shooter problem object
 - `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
 - `q0::Vector{Float64}`: Initial state guess [ndim]
 - `tSpan::Vector{Float64}`: Time span guess [ndim]
-- `numNodes::Int64`: Number of nodes
+- `numSegs::Int64`: Number of segments
 - `targetJC::Float64`: Target Jacobi constant
 - `tol::Float64`: Convergence tolerance (default = 1E-11)
 """
-function correct(targeter::SpatialPerpJCMSTargeter, q0::Vector{Float64}, tSpan::Vector{Float64}, numNodes::Int64, targetJC::Float64, tol::Float64 = 1E-11)
+function correct(targeter::SpatialPerpJCMSTargeter, q0::Vector{Float64}, tSpan::Vector{Float64}, numSegs::Int64, targetJC::Float64, tol::Float64 = 1E-11)
     halfPeriodGuess::Float64 = (tSpan[2]-tSpan[1])/2
     tPCGuess::Float64 = tSpan[1]+halfPeriodGuess
     propagator = MBD.Propagator()
     arc::MBD.CR3BPArc = propagate(propagator, q0, [tSpan[1], tPCGuess], targeter.dynamicsModel)
     numStates::Int64 = getStateCount(arc)
-    halfNodes::Int64 = numNodes/2
-    indices::Vector{Int64} = round.(Int64, range(1, numStates, halfNodes+1))
+    numNodes::Int64 = numSegs/2+1
+    indices::Vector{Int64} = round.(Int64, range(1, numStates, numNodes))
     stateGuesses::Vector{Vector{Float64}} = [getStateByIndex(arc, indices[i]) for i = eachindex(indices)]
     timeGuesses::Vector{Float64} = [getTimeByIndex(arc, indices[i]) for i = eachindex(indices)]
-    nodes::Vector{MBD.CR3BPNode} = [MBD.CR3BPNode(timeGuesses[n], stateGuesses[n], dynamicsModel) for n = 1:(halfNodes+1)]
+    nodes::Vector{MBD.CR3BPNode} = [MBD.CR3BPNode(timeGuesses[n], stateGuesses[n], dynamicsModel) for n = 1:numNodes]
     setFreeVariableMask!(nodes[1].state, [true, false, true, false, true, false])
     problem = MBD.CR3BPMultipleShooterProblem()
-    segments::Vector{MBD.CR3BPSegment} = [MBD.CR3BPSegment(timeGuesses[n+1]-timeGuesses[n], nodes[n], nodes[n+1]) for n = 1:halfNodes]
+    segments::Vector{MBD.CR3BPSegment} = [MBD.CR3BPSegment(timeGuesses[n+1]-timeGuesses[n], nodes[n], nodes[n+1]) for n = 1:(numNodes-1)]
     map(s -> setFreeVariableMask!(s.TOF, [false]), segments[1:(end-1)])
     map(s -> addSegment!(problem, s), segments)
     map(s -> addConstraint!(problem, MBD.CR3BPContinuityConstraint(s)), segments)
