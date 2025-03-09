@@ -55,8 +55,8 @@ function correct(targeter::SpatialPerpJCMSTargeter, q0::Vector{Float64}, tSpan::
     nodes::Vector{MBD.CR3BPNode} = [MBD.CR3BPNode(timeGuesses[n], stateGuesses[n], dynamicsModel) for n = 1:numNodes]
     setFreeVariableMask!(nodes[1].state, [true, false, true, false, true, false])
     problem = MBD.CR3BPMultipleShooterProblem()
-    segments::Vector{MBD.CR3BPSegment} = [MBD.CR3BPSegment(timeGuesses[n+1]-timeGuesses[n], nodes[n], nodes[n+1]) for n = 1:(numNodes-1)]
-    map(s -> setFreeVariableMask!(s.TOF, [false]), segments[1:(end-1)])
+    segments::Vector{MBD.CR3BPSegment} = [MBD.CR3BPSegment(timeGuesses[n+1]-timeGuesses[n], nodes[n], nodes[n+1]) for n = 1:numNodes-1]
+    map(s -> setFreeVariableMask!(s.TOF, [false]), segments[1:end-1])
     map(s -> addSegment!(problem, s), segments)
     map(s -> addConstraint!(problem, MBD.CR3BPContinuityConstraint(s)), segments)
     addConstraint!(problem, MBD.CR3BPStateConstraint(nodes[end], [2, 4, 6], [0.0, 0.0, 0.0]))
