@@ -3,7 +3,7 @@ Script for BCR4BP code development
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 3/10/25
+U: 3/13/25
 """
 module BCR4BPDev
 println()
@@ -29,11 +29,12 @@ B1 = systemData.primaryData[4]
 (get12CharLength(systemData) == getCharLength(EMSystemData)) && (get12CharMass(systemData) == getCharMass(EMSystemData)) && (get12CharTime(systemData) == getCharTime(EMSystemData)) && (get12MassRatio(systemData) == getMassRatio(EMSystemData)) || ArgumentError("Earth-Moon system does not match between models")
 (get41CharLength(systemData) == getCharLength(SB1SystemData)) && (get41CharMass(systemData) == getCharMass(SB1SystemData)) && (get41CharTime(systemData) == getCharTime(SB1SystemData)) && (get41MassRatio(systemData) == getMassRatio(SB1SystemData)) || ArgumentError("Sun-B1 system does not match between models")
 
+propagator = MBD.Propagator()
 CR3BPTargeter = PlanarPerpJCTargeter(CR3BPDynamicsModel)
 CR3BPOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, "FamilyData/EML1Lyapunovs.csv", "JC", 3.0)
 println("\nCR3BP Orbit:\n\tState:$(CR3BPOrbit.initialCondition)\n\tPeriod: $(CR3BPOrbit.period)\n\tJC: $(getJacobiConstant(CR3BPOrbit))\n\tStability: $(getStabilityIndex(CR3BPOrbit))")
+orbitArc::MBD.CR3BPArc = propagate(propagator, CR3BPOrbit.initialCondition, collect(range(0, 1.5*CR3BPOrbit.period, 1001)), CR3BPDynamicsModel)
 
-propagator = MBD.Propagator()
 arcEM::MBD.BCR4BP12Arc = propagate(propagator, push!(copy(CR3BPOrbit.initialCondition), pi*0), collect(range(0, 1.5*CR3BPOrbit.period, 1001)), EMDynamicsModel)
 nStates::Int64 = getStateCount(arcEM)
 xEM::Vector{Float64} = zeros(Float64, nStates)
@@ -114,7 +115,8 @@ for s::Int64 in 1:nStates_v
     thetaSEM_v[s] = statesEM_v[s][7]
 end
 
-statesEEclipJ2000::Vector{Vector{Float64}} = rotating12ToPrimaryEclipJ2000(EMDynamicsModel, 1, "Jan 1 2030", arcEM.states, arcEM.times)
+(statesEEclipJ2000::Vector{Vector{Float64}}, epochTimes::Vector{Float64}) = rotating12ToPrimaryEcliptic(EMDynamicsModel, "ECLIPJ2000", 1, "Jan 1 2030", arcEM.states, arcEM.times)
+initialEpoch = SPICE.et2utc(epochTimes[1], :C, 0)
 xEEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
 yEEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
 zEEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
@@ -129,8 +131,26 @@ for s::Int64 in 1:nStates
     ydotEEclipJ2000[s] = statesEEclipJ2000[s][5]
     zdotEEclipJ2000[s] = statesEEclipJ2000[s][6]
 end
+println("\nInitial epoch: $initialEpoch")
 
-statesSEclipJ2000::Vector{Vector{Float64}} = rotating12ToPrimaryEclipJ2000(EMDynamicsModel, 4, "Jan 1 2030", arcEM.states, arcEM.times)
+statesCR3BPEclipJ2000::Vector{Vector{Float64}} = rotatingToPrimaryEclipJ2000(CR3BPDynamicsModel, initialEpoch, orbitArc.states, orbitArc.times)
+nStates_CR3BP = getStateCount(orbitArc)
+xCR3BPEclipJ2000::Vector{Float64} = zeros(Float64, nStates_CR3BP)
+yCR3BPEclipJ2000::Vector{Float64} = zeros(Float64, nStates_CR3BP)
+zCR3BPEclipJ2000::Vector{Float64} = zeros(Float64, nStates_CR3BP)
+xdotCR3BPEclipJ2000::Vector{Float64} = zeros(Float64, nStates_CR3BP)
+ydotCR3BPEclipJ2000::Vector{Float64} = zeros(Float64, nStates_CR3BP)
+zdotCR3BPEclipJ2000::Vector{Float64} = zeros(Float64, nStates_CR3BP)
+for s::Int64 in 1:nStates_CR3BP
+    xCR3BPEclipJ2000[s] = statesCR3BPEclipJ2000[s][1]
+    yCR3BPEclipJ2000[s] = statesCR3BPEclipJ2000[s][2]
+    zCR3BPEclipJ2000[s] = statesCR3BPEclipJ2000[s][3]
+    xdotCR3BPEclipJ2000[s] = statesCR3BPEclipJ2000[s][4]
+    ydotCR3BPEclipJ2000[s] = statesCR3BPEclipJ2000[s][5]
+    zdotCR3BPEclipJ2000[s] = statesCR3BPEclipJ2000[s][6]
+end
+
+(statesSEclipJ2000::Vector{Vector{Float64}}) = rotating12ToPrimaryEcliptic(EMDynamicsModel, "ECLIPJ2000", 4, "Jan 1 2030", arcEM.states, arcEM.times)[1]
 xSEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
 ySEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
 zSEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
@@ -148,12 +168,13 @@ end
 
 mf = MATLAB.MatFile("Output/BCR4BPDev.mat", "w")
 exportCR3BPOrbit(CR3BPOrbit, CR3BPDynamicsModel, mf, :orbitCR3BP)
+exportCR3BPTrajectory(xCR3BPEclipJ2000, yCR3BPEclipJ2000, zCR3BPEclipJ2000, xdotCR3BPEclipJ2000, ydotCR3BPEclipJ2000, zdotCR3BPEclipJ2000, orbitArc.times, mf, :trajCR3BPEclipJ2000)
 exportBCR4BP12Trajectory(xEM, yEM, zEM, xdotEM, ydotEM, zdotEM, thetaSEM, tEM, mf, :trajBCR4BPEM)
 exportBCR4BP41Trajectory(xSB1, ySB1, zSB1, xdotSB1, ydotSB1, zdotSB1, thetaMSB1, tSB1, mf, :trajBCR4BPSB1)
 exportBCR4BP41Trajectory(xSB1_v, ySB1_v, zSB1_v, xdotSB1_v, ydotSB1_v, zdotSB1_v, thetaMSB1_v, tSB1_v, mf, :validBCR4BPSB1)
 exportBCR4BP12Trajectory(xEM_v, yEM_v, zEM_v, xdotEM_v, ydotEM_v, zdotEM_v, thetaSEM_v, tEM_v, mf, :validBCR4BPEM)
-exportBCR4BP12Trajectory(xEEclipJ2000, yEEclipJ2000, zEEclipJ2000, xdotEEclipJ2000, ydotEEclipJ2000, zdotEEclipJ2000, thetaSEM, tEM, mf, :trajBCR4BPEEclipJ2000)
-exportBCR4BP12Trajectory(xSEclipJ2000, ySEclipJ2000, zSEclipJ2000, xdotSEclipJ2000, ydotSEclipJ2000, zdotSEclipJ2000, thetaSEM, tEM, mf, :trajBCR4BPSEclipJ2000)
+exportBCR4BP12Trajectory(xEEclipJ2000, yEEclipJ2000, zEEclipJ2000, xdotEEclipJ2000, ydotEEclipJ2000, zdotEEclipJ2000, thetaSEM, epochTimes, mf, :trajBCR4BPEEclipJ2000)
+exportBCR4BP12Trajectory(xSEclipJ2000, ySEclipJ2000, zSEclipJ2000, xdotSEclipJ2000, ydotSEclipJ2000, zdotSEclipJ2000, thetaSEM, epochTimes, mf, :trajBCR4BPSEclipJ2000)
 MATLAB.close(mf)
 
 SPICE.kclear()
