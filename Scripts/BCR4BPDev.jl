@@ -3,14 +3,17 @@ Script for BCR4BP code development
 
 Author: Jonathan Richmond
 C: 2/19/25
+U: 3/10/25
 """
 module BCR4BPDev
 println()
 
-using MBD, MATLAB
+using MBD, MATLAB, SPICE
 
 include("../Targeters/PlanarPerpJC.jl")
 include("../Utilities/Export.jl")
+
+SPICE.furnsh("SPICEKernels/naif0012.tls", "SPICEKernels/de430.bsp", "SPICEKernels/de440.bsp")
 
 EMSystemData = MBD.CR3BPSystemData("Earth", "Moon")
 SB1SystemData = MBD.CR3BPSystemData("Sun", "Earth_Barycenter")
@@ -53,7 +56,7 @@ for s::Int64 in 1:nStates
     tEM[s] = getTimeByIndex(arcEM, s)
 end
 
-(statesSB1::Vector{Vector{Float64}}, tSB1::Vector{Float64}) = rotating122Rotating41(EMDynamicsModel, arcEM.states, arcEM.times)
+(statesSB1::Vector{Vector{Float64}}, tSB1::Vector{Float64}) = rotating12ToRotating41(EMDynamicsModel, arcEM.states, arcEM.times)
 xSB1::Vector{Float64} = zeros(Float64, nStates)
 ySB1::Vector{Float64} = zeros(Float64, nStates)
 zSB1::Vector{Float64} = zeros(Float64, nStates)
@@ -93,7 +96,7 @@ for s::Int64 in 1:nStates_v
     tSB1_v[s] = getTimeByIndex(arcSB1, s)
 end
 
-(statesEM_v::Vector{Vector{Float64}}, tEM_v::Vector{Float64}) = rotating412Rotating12(SB1DynamicsModel, arcSB1.states, arcSB1.times)
+(statesEM_v::Vector{Vector{Float64}}, tEM_v::Vector{Float64}) = rotating41ToRotating12(SB1DynamicsModel, arcSB1.states, arcSB1.times)
 xEM_v::Vector{Float64} = zeros(Float64, nStates_v)
 yEM_v::Vector{Float64} = zeros(Float64, nStates_v)
 zEM_v::Vector{Float64} = zeros(Float64, nStates_v)
@@ -111,13 +114,49 @@ for s::Int64 in 1:nStates_v
     thetaSEM_v[s] = statesEM_v[s][7]
 end
 
+statesEEclipJ2000::Vector{Vector{Float64}} = rotating12ToPrimaryEclipJ2000(EMDynamicsModel, 1, "Jan 1 2030", arcEM.states, arcEM.times)
+xEEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
+yEEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
+zEEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
+xdotEEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
+ydotEEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
+zdotEEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
+for s::Int64 in 1:nStates
+    xEEclipJ2000[s] = statesEEclipJ2000[s][1]
+    yEEclipJ2000[s] = statesEEclipJ2000[s][2]
+    zEEclipJ2000[s] = statesEEclipJ2000[s][3]
+    xdotEEclipJ2000[s] = statesEEclipJ2000[s][4]
+    ydotEEclipJ2000[s] = statesEEclipJ2000[s][5]
+    zdotEEclipJ2000[s] = statesEEclipJ2000[s][6]
+end
+
+statesSEclipJ2000::Vector{Vector{Float64}} = rotating12ToPrimaryEclipJ2000(EMDynamicsModel, 4, "Jan 1 2030", arcEM.states, arcEM.times)
+xSEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
+ySEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
+zSEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
+xdotSEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
+ydotSEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
+zdotSEclipJ2000::Vector{Float64} = zeros(Float64, nStates)
+for s::Int64 in 1:nStates
+    xSEclipJ2000[s] = statesSEclipJ2000[s][1]
+    ySEclipJ2000[s] = statesSEclipJ2000[s][2]
+    zSEclipJ2000[s] = statesSEclipJ2000[s][3]
+    xdotSEclipJ2000[s] = statesSEclipJ2000[s][4]
+    ydotSEclipJ2000[s] = statesSEclipJ2000[s][5]
+    zdotSEclipJ2000[s] = statesSEclipJ2000[s][6]
+end
+
 mf = MATLAB.MatFile("Output/BCR4BPDev.mat", "w")
 exportCR3BPOrbit(CR3BPOrbit, CR3BPDynamicsModel, mf, :orbitCR3BP)
 exportBCR4BP12Trajectory(xEM, yEM, zEM, xdotEM, ydotEM, zdotEM, thetaSEM, tEM, mf, :trajBCR4BPEM)
 exportBCR4BP41Trajectory(xSB1, ySB1, zSB1, xdotSB1, ydotSB1, zdotSB1, thetaMSB1, tSB1, mf, :trajBCR4BPSB1)
 exportBCR4BP41Trajectory(xSB1_v, ySB1_v, zSB1_v, xdotSB1_v, ydotSB1_v, zdotSB1_v, thetaMSB1_v, tSB1_v, mf, :validBCR4BPSB1)
 exportBCR4BP12Trajectory(xEM_v, yEM_v, zEM_v, xdotEM_v, ydotEM_v, zdotEM_v, thetaSEM_v, tEM_v, mf, :validBCR4BPEM)
+exportBCR4BP12Trajectory(xEEclipJ2000, yEEclipJ2000, zEEclipJ2000, xdotEEclipJ2000, ydotEEclipJ2000, zdotEEclipJ2000, thetaSEM, tEM, mf, :trajBCR4BPEEclipJ2000)
+exportBCR4BP12Trajectory(xSEclipJ2000, ySEclipJ2000, zSEclipJ2000, xdotSEclipJ2000, ydotSEclipJ2000, zdotSEclipJ2000, thetaSEM, tEM, mf, :trajBCR4BPSEclipJ2000)
 MATLAB.close(mf)
+
+SPICE.kclear()
 
 println()
 end
