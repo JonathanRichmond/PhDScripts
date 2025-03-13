@@ -35,7 +35,7 @@ CR3BPOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, "FamilyData/EML1
 println("\nCR3BP Orbit:\n\tState:$(CR3BPOrbit.initialCondition)\n\tPeriod: $(CR3BPOrbit.period)\n\tJC: $(getJacobiConstant(CR3BPOrbit))\n\tStability: $(getStabilityIndex(CR3BPOrbit))")
 orbitArc::MBD.CR3BPArc = propagate(propagator, CR3BPOrbit.initialCondition, collect(range(0, 1.5*CR3BPOrbit.period, 1001)), CR3BPDynamicsModel)
 
-arcEM::MBD.BCR4BP12Arc = propagate(propagator, push!(copy(CR3BPOrbit.initialCondition), pi*0), collect(range(0, 1.5*CR3BPOrbit.period, 1001)), EMDynamicsModel)
+arcEM::MBD.BCR4BP12Arc = propagate(propagator, push!(copy(CR3BPOrbit.initialCondition), pi*1/2), collect(range(0, 1.5*CR3BPOrbit.period, 1001)), EMDynamicsModel)
 nStates::Int64 = getStateCount(arcEM)
 xEM::Vector{Float64} = zeros(Float64, nStates)
 yEM::Vector{Float64} = zeros(Float64, nStates)
@@ -133,6 +133,15 @@ for s::Int64 in 1:nStates
 end
 println("\nInitial epoch: $initialEpoch")
 
+MoonEclipJ2000::Vector{Float64} = getEphemerides(initialEpoch, [0.0], "Moon", "Earth_Barycenter", "ECLIPJ2000")[1][1]
+MoonSPICEElements::Vector{Float64} = SPICE.oscltx(MoonEclipJ2000, epochTimes[1], B1.gravParam)
+MoonSPICEElements[3] = 0.0
+MoonJ2000::Vector{Float64} = SPICE.conics(MoonSPICEElements[1:8], epochTimes[1])
+SunEclipJ2000::Vector{Float64} = getEphemerides(initialEpoch, [0.0], "Sun", "Earth_Barycenter", "ECLIPJ2000")[1][1]
+SunSPICEElements::Vector{Float64} = SPICE.oscltx(SunEclipJ2000, epochTimes[1], B1.gravParam)
+SunSPICEElements[3] = 0.0
+SunJ2000::Vector{Float64} = SPICE.conics(SunSPICEElements[1:8], epochTimes[1])
+
 statesCR3BPEclipJ2000::Vector{Vector{Float64}} = rotatingToPrimaryEclipJ2000(CR3BPDynamicsModel, initialEpoch, orbitArc.states, orbitArc.times)
 nStates_CR3BP = getStateCount(orbitArc)
 xCR3BPEclipJ2000::Vector{Float64} = zeros(Float64, nStates_CR3BP)
@@ -169,6 +178,8 @@ end
 mf = MATLAB.MatFile("Output/BCR4BPDev.mat", "w")
 exportCR3BPOrbit(CR3BPOrbit, CR3BPDynamicsModel, mf, :orbitCR3BP)
 exportCR3BPTrajectory(xCR3BPEclipJ2000, yCR3BPEclipJ2000, zCR3BPEclipJ2000, xdotCR3BPEclipJ2000, ydotCR3BPEclipJ2000, zdotCR3BPEclipJ2000, orbitArc.times, mf, :trajCR3BPEclipJ2000)
+exportCR3BPTrajectory([MoonJ2000[1]], [MoonJ2000[2]], [MoonJ2000[3]], [MoonJ2000[4]], [MoonJ2000[5]], [MoonJ2000[6]], [epochTimes[1]], mf, :MoonInitialState)
+exportCR3BPTrajectory([SunJ2000[1]], [SunJ2000[2]], [SunJ2000[3]], [SunJ2000[4]], [SunJ2000[5]], [SunJ2000[6]], [epochTimes[1]], mf, :SunInitialState)
 exportBCR4BP12Trajectory(xEM, yEM, zEM, xdotEM, ydotEM, zdotEM, thetaSEM, tEM, mf, :trajBCR4BPEM)
 exportBCR4BP41Trajectory(xSB1, ySB1, zSB1, xdotSB1, ydotSB1, zdotSB1, thetaMSB1, tSB1, mf, :trajBCR4BPSB1)
 exportBCR4BP41Trajectory(xSB1_v, ySB1_v, zSB1_v, xdotSB1_v, ydotSB1_v, zdotSB1_v, thetaMSB1_v, tSB1_v, mf, :validBCR4BPSB1)
