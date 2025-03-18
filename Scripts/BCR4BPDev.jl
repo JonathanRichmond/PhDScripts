@@ -3,7 +3,7 @@ Script for BCR4BP code development
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 3/13/25
+U: 3/18/25
 """
 module BCR4BPDev
 println()
@@ -133,12 +133,18 @@ for s::Int64 in 1:nStates
 end
 println("\nInitial epoch: $initialEpoch")
 
+thetaM::Float64 = (pi-getStateByIndex(arcEM, 1)[7] > 0) ? (pi-getStateByIndex(arcEM, 1)[7]) : (3*pi-getStateByIndex(arcEM, 1)[7])
+initialEpochTimeSB1::Float64 = getEpochTime(SB1DynamicsModel, "ECLIPJ2000", "Jan 10 2030", thetaM)
+println("Check: $(SPICE.et2utc(initialEpochTimeSB1, :C, 0))")
+
 MoonEclipJ2000::Vector{Float64} = getEphemerides(initialEpoch, [0.0], "Moon", "Earth_Barycenter", "ECLIPJ2000")[1][1]
 MoonSPICEElements::Vector{Float64} = SPICE.oscltx(MoonEclipJ2000, epochTimes[1], B1.gravParam)
+MoonSPICEElements[1] = get12CharLength(systemData)*(1-get12MassRatio(systemData))
 MoonSPICEElements[3] = 0.0
 MoonJ2000::Vector{Float64} = SPICE.conics(MoonSPICEElements[1:8], epochTimes[1])
 SunEclipJ2000::Vector{Float64} = getEphemerides(initialEpoch, [0.0], "Sun", "Earth_Barycenter", "ECLIPJ2000")[1][1]
 SunSPICEElements::Vector{Float64} = SPICE.oscltx(SunEclipJ2000, epochTimes[1], B1.gravParam)
+SunSPICEElements[1] = get41CharLength(systemData)
 SunSPICEElements[3] = 0.0
 SunJ2000::Vector{Float64} = SPICE.conics(SunSPICEElements[1:8], epochTimes[1])
 
