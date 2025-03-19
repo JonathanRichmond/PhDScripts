@@ -3,7 +3,7 @@ Script for BCR4BP code development
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 3/18/25
+U: 3/19/25
 """
 module BCR4BPDev
 println()
@@ -133,9 +133,27 @@ for s::Int64 in 1:nStates
 end
 println("\nInitial epoch: $initialEpoch")
 
+(statesSB1EEclipJ2000::Vector{Vector{Float64}}, epochTimesSB1::Vector{Float64}) = rotating41ToPrimaryEcliptic(SB1DynamicsModel, "ECLIPJ2000", 1, "Jan 1 2030", arcSB1.states, arcSB1.times)
+initialEpochSB1 = SPICE.et2utc(epochTimesSB1[1], :C, 0)
+xSB1EEclipJ2000::Vector{Float64} = zeros(Float64, nStates_v)
+ySB1EEclipJ2000::Vector{Float64} = zeros(Float64, nStates_v)
+zSB1EEclipJ2000::Vector{Float64} = zeros(Float64, nStates_v)
+xdotSB1EEclipJ2000::Vector{Float64} = zeros(Float64, nStates_v)
+ydotSB1EEclipJ2000::Vector{Float64} = zeros(Float64, nStates_v)
+zdotSB1EEclipJ2000::Vector{Float64} = zeros(Float64, nStates_v)
+for s::Int64 in 1:nStates_v
+    xSB1EEclipJ2000[s] = statesSB1EEclipJ2000[s][1]
+    ySB1EEclipJ2000[s] = statesSB1EEclipJ2000[s][2]
+    zSB1EEclipJ2000[s] = statesSB1EEclipJ2000[s][3]
+    xdotSB1EEclipJ2000[s] = statesSB1EEclipJ2000[s][4]
+    ydotSB1EEclipJ2000[s] = statesSB1EEclipJ2000[s][5]
+    zdotSB1EEclipJ2000[s] = statesSB1EEclipJ2000[s][6]
+end
+println("Initial epoch check 1: $initialEpochSB1")
+
 thetaM::Float64 = (pi-getStateByIndex(arcEM, 1)[7] > 0) ? (pi-getStateByIndex(arcEM, 1)[7]) : (3*pi-getStateByIndex(arcEM, 1)[7])
 initialEpochTimeSB1::Float64 = getEpochTime(SB1DynamicsModel, "ECLIPJ2000", "Jan 10 2030", thetaM)
-println("Check: $(SPICE.et2utc(initialEpochTimeSB1, :C, 0))")
+println("Initial epoch check 2: $(SPICE.et2utc(initialEpochTimeSB1, :C, 0))")
 
 MoonEclipJ2000::Vector{Float64} = getEphemerides(initialEpoch, [0.0], "Moon", "Earth_Barycenter", "ECLIPJ2000")[1][1]
 MoonSPICEElements::Vector{Float64} = SPICE.oscltx(MoonEclipJ2000, epochTimes[1], B1.gravParam)
@@ -191,6 +209,7 @@ exportBCR4BP41Trajectory(xSB1, ySB1, zSB1, xdotSB1, ydotSB1, zdotSB1, thetaMSB1,
 exportBCR4BP41Trajectory(xSB1_v, ySB1_v, zSB1_v, xdotSB1_v, ydotSB1_v, zdotSB1_v, thetaMSB1_v, tSB1_v, mf, :validBCR4BPSB1)
 exportBCR4BP12Trajectory(xEM_v, yEM_v, zEM_v, xdotEM_v, ydotEM_v, zdotEM_v, thetaSEM_v, tEM_v, mf, :validBCR4BPEM)
 exportBCR4BP12Trajectory(xEEclipJ2000, yEEclipJ2000, zEEclipJ2000, xdotEEclipJ2000, ydotEEclipJ2000, zdotEEclipJ2000, thetaSEM, epochTimes, mf, :trajBCR4BPEEclipJ2000)
+exportBCR4BP41Trajectory(xSB1EEclipJ2000, ySB1EEclipJ2000, zSB1EEclipJ2000, xdotSB1EEclipJ2000, ydotSB1EEclipJ2000, zdotSB1EEclipJ2000, thetaMSB1_v, epochTimesSB1, mf, :trajBCR4BPSB1EEclipJ2000)
 exportBCR4BP12Trajectory(xSEclipJ2000, ySEclipJ2000, zSEclipJ2000, xdotSEclipJ2000, ydotSEclipJ2000, zdotSEclipJ2000, thetaSEM, epochTimes, mf, :trajBCR4BPSEclipJ2000)
 MATLAB.close(mf)
 
