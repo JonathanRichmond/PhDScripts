@@ -3,7 +3,7 @@ Script for multiple shooter code development
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 3/31/25
+U: 4/1/25
 """
 module MSDev
 println()
@@ -29,38 +29,34 @@ targeter = SpatialPerpJCMSTargeter(dynamicsModel)
 initialStateGuess::Vector{Float64} = [0.881995, 0, -0.24036, 0, 0.144858, 0]
 tSpanGuess::Vector{Float64} = [0, 20.3756]
 targetJC::Float64 = 2.9833
-numSegs::Int64 = 14
+numSegs::Int64 = 28
 solution1::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numSegs, targetJC, 1E-10)
 println("Converged Orbit 1:\n\tState:$(solution1.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution1))\n\tJC: $(getJacobiConstant(dynamicsModel, solution1.nodes[1].state.data[1:6]))")
 
-solution2::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numSegs, targetJC-1E-5, 1E-10)
+solution2::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numSegs, targetJC+1E-5, 1E-10)
 println("\nConverged Orbit 2:\n\tState:$(solution2.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution2))\n\tJC: $(getJacobiConstant(dynamicsModel, solution2.nodes[1].state.data[1:6]))")
 
-# engine = MBD.JacobiConstantContinuationEngine(solution1, solution2, -1E-5, -1E-2)
-# ydot0JumpCheck = MBD.BoundingBoxJumpCheck("Initial State", [NaN NaN; -0.5 0])
-# addJumpCheck!(engine, ydot0JumpCheck)
-# numStepsEndCheck = MBD.NumberStepsContinuationEndCheck(3)
-# addEndCheck!(engine, numStepsEndCheck)
-# MoonEndCheck = MBD.BoundingBoxContinuationEndCheck("Initial State", [L1[1] getPrimaryPosition(dynamicsModel, 2)[1]-Moon.bodyRadius/getCharLength(systemData); NaN NaN])
-# addEndCheck!(engine, MoonEndCheck)
+engine = MBD.CR3BPMultipleShooterContinuationEngine(solution1, solution2, "Jacobi Constant", 1, 5E-6, 5E-4)
+ydot0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [NaN NaN; -0.5 0; NaN NaN])
+addJumpCheck!(engine, ydot0JumpCheck)
+numStepsEndCheck = MBD.NumberStepsContinuationEndCheck(50)
+addEndCheck!(engine, numStepsEndCheck)
 
-# println()
-# solutions::MBD.CR3BPContinuationFamily = doContinuation!(engine, solution1, solution2)
+println()
+solutions::MBD.CR3BPContinuationFamily = doContinuation!(targeter, engine, solution1, solution2, numSegs, 1E-10)
+println("\nLast Converged Orbit:\n\tState:$(solutions.nodes[end][1].state.data[1:6])\n\tPeriod: $(solutions.nodes[end][end].epoch.data[1]*2)\n\tJC: $(getJacobiConstant(dynamicsModel, solutions.nodes[end][1].state.data[1:6]))")
 
-testSolution3::MBD.CR3BPMultipleShooterProblem = correct(targeter, 2*solution2.nodes[1].state.data[1:6]-solution1.nodes[1].state.data[1:6], [0, 2*getPeriod(targeter, solution2)-getPeriod(targeter, solution1)], numSegs, targetJC-2E-5, 1E-10)
-println("\nConverged Test Orbit 3:\n\tState:$(testSolution3.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, testSolution3))\n\tJC: $(getJacobiConstant(dynamicsModel, testSolution3.nodes[1].state.data[1:6]))")
-
-exportSolution::MBD.CR3BPMultipleShooterProblem = testSolution3
+exportSolution::Int64 = length(solutions.nodes)
 propagator = MBD.Propagator()
 mf = MATLAB.MatFile("Output/CR3BPTraj.mat", "w")
 for s::Int64 = 1:numSegs/2
     elapsedT::Float64 = 0.0
     if s > 1
         for j::Int64 = 2:s
-            elapsedT += exportSolution.segments[s-1].TOF.data[1]
+            elapsedT += solutions.segments[exportSolution][s-1].TOF.data[1]
         end
     end
-    arc::MBD.CR3BPArc = propagate(propagator, exportSolution.nodes[s].state.data[1:6], [elapsedT, elapsedT+exportSolution.segments[s].TOF.data[1]], dynamicsModel)
+    arc::MBD.CR3BPArc = propagate(propagator, solutions.nodes[exportSolution][s].state.data[1:6], [elapsedT, elapsedT+solutions.segments[exportSolution][s].TOF.data[1]], dynamicsModel)
     nStates::Int64 = getStateCount(arc)
     x::Vector{Float64} = zeros(Float64, nStates)
     y::Vector{Float64} = zeros(Float64, nStates)
@@ -83,15 +79,15 @@ for s::Int64 = 1:numSegs/2
 end
 for s::Int64 = 1:numSegs/2
     elapsedT::Float64 = 0.0
-    for j = 1:length(exportSolution.segments)
-        elapsedT += exportSolution.segments[j].TOF.data[1]
+    for j = 1:length(solutions.segments[exportSolution])
+        elapsedT += solutions.segments[exportSolution][j].TOF.data[1]
     end
     if s > 1
         for j::Int64 = 2:s
-            elapsedT += exportSolution.segments[end+2-s].TOF.data[1]
+            elapsedT += solutions.segments[exportSolution][end+2-s].TOF.data[1]
         end
     end
-    arc::MBD.CR3BPArc = propagate(propagator, exportSolution.nodes[end-s].state.data[1:6].*[1, -1, 1, -1, 1, -1], [elapsedT+exportSolution.segments[end+1-s].TOF.data[1], elapsedT], dynamicsModel)
+    arc::MBD.CR3BPArc = propagate(propagator, solutions.nodes[exportSolution][end-s].state.data[1:6].*[1, -1, 1, -1, 1, -1], [elapsedT+solutions.segments[exportSolution][end+1-s].TOF.data[1], elapsedT], dynamicsModel)
     nStates::Int64 = getStateCount(arc)
     x::Vector{Float64} = zeros(Float64, nStates)
     y::Vector{Float64} = zeros(Float64, nStates)
