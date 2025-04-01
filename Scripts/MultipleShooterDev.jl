@@ -29,7 +29,7 @@ targeter = SpatialPerpJCMSTargeter(dynamicsModel)
 initialStateGuess::Vector{Float64} = [0.881995, 0, -0.24036, 0, 0.144858, 0]
 tSpanGuess::Vector{Float64} = [0, 20.3756]
 targetJC::Float64 = 2.9833
-numSegs::Int64 = 28
+numSegs::Int64 = 14
 solution1::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numSegs, targetJC, 1E-10)
 println("Converged Orbit 1:\n\tState:$(solution1.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution1))\n\tJC: $(getJacobiConstant(dynamicsModel, solution1.nodes[1].state.data[1:6]))")
 
