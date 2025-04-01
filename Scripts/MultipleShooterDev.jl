@@ -1,12 +1,11 @@
 """
-Script for Earth-Moon CR3BP spatial cycler orbit family
-    *Initial condition provided by Gomez*
+Script for multiple shooter code development
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 3/6/25
+U: 3/31/25
 """
-module EMSCycler
+module MSDev
 println()
 
 using MBD, MATLAB
@@ -27,17 +26,31 @@ L5::Vector{Float64} = getEquilibriumPoint(dynamicsModel, 5)
 
 targeter = SpatialPerpJCMSTargeter(dynamicsModel)
 
-initialStateGuess::Vector{Float64} = [0.881995, 0, -0.24036, 0, 0.144858, 0] # [0.8327, 0, 0.08783, 0, 0.1718, 0]
-tSpanGuess::Vector{Float64} = [0, 20.3756] # [0, 6.7911]
-targetJC::Float64 = 2.9833 # getJacobiConstant(dynamicsModel, initialStateGuess)
+initialStateGuess::Vector{Float64} = [0.881995, 0, -0.24036, 0, 0.144858, 0]
+tSpanGuess::Vector{Float64} = [0, 20.3756]
+targetJC::Float64 = 2.9833
 numSegs::Int64 = 14
 solution1::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numSegs, targetJC, 1E-10)
 println("Converged Orbit 1:\n\tState:$(solution1.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution1))\n\tJC: $(getJacobiConstant(dynamicsModel, solution1.nodes[1].state.data[1:6]))")
 
-# solution2::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess+[0, 0, 0.0001, 0, 0, 0], tSpanGuess, 2, targetJC-1E-5, 1E-10)
-# println("\nConverged Orbit 2:\n\tState:$(solution2.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution2))\n\tJC: $(getJacobiConstant(dynamicsModel, solution2.nodes[1].state.data[1:6]))")
+solution2::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numSegs, targetJC-1E-5, 1E-10)
+println("\nConverged Orbit 2:\n\tState:$(solution2.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution2))\n\tJC: $(getJacobiConstant(dynamicsModel, solution2.nodes[1].state.data[1:6]))")
 
-exportSolution::MBD.CR3BPMultipleShooterProblem = solution1
+# engine = MBD.JacobiConstantContinuationEngine(solution1, solution2, -1E-5, -1E-2)
+# ydot0JumpCheck = MBD.BoundingBoxJumpCheck("Initial State", [NaN NaN; -0.5 0])
+# addJumpCheck!(engine, ydot0JumpCheck)
+# numStepsEndCheck = MBD.NumberStepsContinuationEndCheck(3)
+# addEndCheck!(engine, numStepsEndCheck)
+# MoonEndCheck = MBD.BoundingBoxContinuationEndCheck("Initial State", [L1[1] getPrimaryPosition(dynamicsModel, 2)[1]-Moon.bodyRadius/getCharLength(systemData); NaN NaN])
+# addEndCheck!(engine, MoonEndCheck)
+
+# println()
+# solutions::MBD.CR3BPContinuationFamily = doContinuation!(engine, solution1, solution2)
+
+testSolution3::MBD.CR3BPMultipleShooterProblem = correct(targeter, 2*solution2.nodes[1].state.data[1:6]-solution1.nodes[1].state.data[1:6], [0, 2*getPeriod(targeter, solution2)-getPeriod(targeter, solution1)], numSegs, targetJC-2E-5, 1E-10)
+println("\nConverged Test Orbit 3:\n\tState:$(testSolution3.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, testSolution3))\n\tJC: $(getJacobiConstant(dynamicsModel, testSolution3.nodes[1].state.data[1:6]))")
+
+exportSolution::MBD.CR3BPMultipleShooterProblem = testSolution3
 propagator = MBD.Propagator()
 mf = MATLAB.MatFile("Output/CR3BPTraj.mat", "w")
 for s::Int64 = 1:numSegs/2
