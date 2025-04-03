@@ -3,7 +3,7 @@ Jacobi constant perpendicular crossing multiple shooter for spatial orbits
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 4/1/25
+U: 4/2/25
 """
 
 using MBD, CSV, DataFrames, LinearAlgebra, StaticArrays
@@ -115,6 +115,7 @@ function doContinuation!(targeter::SpatialPerpJCMSTargeter, multipleShooterConti
             tryConverging!(targeter, multipleShooterContinuationEngine, numSegs, tol)
         end
         if (multipleShooterContinuationEngine.storeIntermediateMembers && multipleShooterContinuationEngine.dataInProgress.converging)
+            println("\tConverged Initial State: $(multipleShooterContinuationEngine.dataInProgress.previousSolution.nodes[1].state.data[1:6])")
             push!(multipleShooterContinuationEngine.dataInProgress.family.nodes, [MBD.shallowClone(multipleShooterContinuationEngine.dataInProgress.previousSolution.nodes[n]) for n = 1:length(multipleShooterContinuationEngine.dataInProgress.previousSolution.nodes)])
             push!(multipleShooterContinuationEngine.dataInProgress.family.segments, [MBD.shallowClone(multipleShooterContinuationEngine.dataInProgress.previousSolution.segments[s]) for s = 1:length(multipleShooterContinuationEngine.dataInProgress.previousSolution.segments)])
         end
@@ -128,6 +129,24 @@ function doContinuation!(targeter::SpatialPerpJCMSTargeter, multipleShooterConti
     end
 
     return multipleShooterContinuationEngine.dataInProgress.family
+end
+
+"""
+    getPeriod(targeter, segments)
+
+Return orbit period
+
+# Arguments
+- `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
+- `segments::Vector{CR3BPSegment}`: CR3BP segment objects
+"""
+function getPeriod(targeter::SpatialPerpJCMSTargeter, segments::Vector{MBD.CR3BPSegment})
+    TOF::Float64 = 0.0
+    for s = 1:length(segments)
+        TOF += segments[s].TOF.data[1]
+    end
+
+    return 2*TOF
 end
 
 """
@@ -182,11 +201,12 @@ function tryConverging!(targeter::SpatialPerpJCMSTargeter, multipleShooterContin
     updateStepSize!(multipleShooterContinuationEngine.stepSizeGenerator, multipleShooterContinuationEngine.dataInProgress)
     multipleShooterContinuationEngine.printProgress && println("\tCurrent step size: $(multipleShooterContinuationEngine.dataInProgress.currentStepSize)")
     try
+        twoPreviousConvergedSolution::MBD.CR3BPMultipleShooterProblem = multipleShooterContinuationEngine.dataInProgress.twoPreviousSolution
         previousConvergedSolution::MBD.CR3BPMultipleShooterProblem = multipleShooterContinuationEngine.dataInProgress.previousSolution
         targJC::Float64 = getJacobiConstant(targeter.dynamicsModel, previousConvergedSolution.nodes[1].state.data[1:6])+multipleShooterContinuationEngine.dataInProgress.currentStepSize
         println("\tTarget Jacobi Constant: $targJC")
         multipleShooterContinuationEngine.dataInProgress.twoPreviousSolution = MBD.deepClone(multipleShooterContinuationEngine.dataInProgress.previousSolution)
-        multipleShooterContinuationEngine.dataInProgress.previousSolution = correct(targeter, previousConvergedSolution.nodes[1].state.data+stateStep.*multipleShooterContinuationEngine.dataInProgress.currentStepSize, [0, 2*(previousConvergedSolution.nodes[end].epoch.data[1]+timeStep*multipleShooterContinuationEngine.dataInProgress.currentStepSize)], numSegs, targJC, tol)
+        multipleShooterContinuationEngine.dataInProgress.previousSolution = correct(targeter, previousConvergedSolution.nodes[1].state.data+stateStep.*multipleShooterContinuationEngine.dataInProgress.currentStepSize, [0, getPeriod(targeter, previousConvergedSolution)+timeStep*multipleShooterContinuationEngine.dataInProgress.currentStepSize], numSegs, targJC, tol)
         multipleShooterContinuationEngine.dataInProgress.converging = true
         for jumpCheck::MBD.AbstractContinuationJumpCheck in multipleShooterContinuationEngine.jumpChecks
             if typeof(jumpCheck) == MBD.BoundingBoxJumpCheck
@@ -207,8 +227,9 @@ function tryConverging!(targeter::SpatialPerpJCMSTargeter, multipleShooterContin
             multipleShooterContinuationEngine.dataInProgress.twoPreviousSolution = twoPreviousConvergedSolution
             multipleShooterContinuationEngine.dataInProgress.previousSolution = previousConvergedSolution
         end
-    catch
+    catch err
         multipleShooterContinuationEngine.dataInProgress.converging = false
         println("\tFailed to converge")
+        # @error exception = (err, catch_backtrace())
     end
 end

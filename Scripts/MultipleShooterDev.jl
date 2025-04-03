@@ -3,7 +3,7 @@ Script for multiple shooter code development
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 4/1/25
+U: 4/2/25
 """
 module MSDev
 println()
@@ -26,25 +26,25 @@ L5::Vector{Float64} = getEquilibriumPoint(dynamicsModel, 5)
 
 targeter = SpatialPerpJCMSTargeter(dynamicsModel)
 
-initialStateGuess::Vector{Float64} = [0.881995, 0, -0.24036, 0, 0.144858, 0]
-tSpanGuess::Vector{Float64} = [0, 20.3756]
-targetJC::Float64 = 2.9833
-numSegs::Int64 = 14
+initialStateGuess::Vector{Float64} = [0.850522, 0, -0.177117, 0, 0.255761, 0] # [0.881995, 0, -0.24036, 0, 0.144858, 0]
+tSpanGuess::Vector{Float64} = [0, 18.0561] # [0, 20.3756]
+targetJC::Float64 = 3.0098 # 2.9833
+numSegs::Int64 = 28
 solution1::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numSegs, targetJC, 1E-10)
 println("Converged Orbit 1:\n\tState:$(solution1.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution1))\n\tJC: $(getJacobiConstant(dynamicsModel, solution1.nodes[1].state.data[1:6]))")
 
-solution2::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numSegs, targetJC+1E-5, 1E-10)
+solution2::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numSegs, targetJC-1E-5, 1E-10)
 println("\nConverged Orbit 2:\n\tState:$(solution2.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution2))\n\tJC: $(getJacobiConstant(dynamicsModel, solution2.nodes[1].state.data[1:6]))")
 
-engine = MBD.CR3BPMultipleShooterContinuationEngine(solution1, solution2, "Jacobi Constant", 1, 5E-6, 5E-4)
-ydot0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [NaN NaN; -0.5 0; NaN NaN])
-addJumpCheck!(engine, ydot0JumpCheck)
-numStepsEndCheck = MBD.NumberStepsContinuationEndCheck(50)
+engine = MBD.CR3BPMultipleShooterContinuationEngine(solution1, solution2, "Jacobi Constant", 1, -5E-6, -1E-4)
+q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.85 0.91; -0.5 -0.17; 0.08 0.26])
+addJumpCheck!(engine, q0JumpCheck)
+numStepsEndCheck = MBD.NumberStepsContinuationEndCheck(2500)
 addEndCheck!(engine, numStepsEndCheck)
 
 println()
 solutions::MBD.CR3BPContinuationFamily = doContinuation!(targeter, engine, solution1, solution2, numSegs, 1E-10)
-println("\nLast Converged Orbit:\n\tState:$(solutions.nodes[end][1].state.data[1:6])\n\tPeriod: $(solutions.nodes[end][end].epoch.data[1]*2)\n\tJC: $(getJacobiConstant(dynamicsModel, solutions.nodes[end][1].state.data[1:6]))")
+println("\nLast Converged Orbit:\n\tState:$(solutions.nodes[end][1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solutions.segments[end]))\n\tJC: $(getJacobiConstant(dynamicsModel, solutions.nodes[end][1].state.data[1:6]))")
 
 exportSolution::Int64 = length(solutions.nodes)
 propagator = MBD.Propagator()
