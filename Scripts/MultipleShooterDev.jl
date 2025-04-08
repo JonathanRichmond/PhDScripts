@@ -39,7 +39,7 @@ println("\nConverged Orbit 2:\n\tState:$(solution2.nodes[1].state.data[1:6])\n\t
 engine = MBD.CR3BPMultipleShooterContinuationEngine(solution1, solution2, "Jacobi Constant", 1, -5E-6, -1E-4)
 q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.85 0.91; -0.5 -0.17; 0.08 0.26])
 addJumpCheck!(engine, q0JumpCheck)
-numStepsEndCheck = MBD.NumberStepsContinuationEndCheck(2500)
+numStepsEndCheck = MBD.NumberStepsContinuationEndCheck(3000)
 addEndCheck!(engine, numStepsEndCheck)
 
 println()
