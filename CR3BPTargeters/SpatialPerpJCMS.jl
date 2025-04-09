@@ -1,5 +1,5 @@
 """
-Jacobi constant perpendicular crossing multiple shooter for spatial orbits
+Jacobi constant perpendicular crossing multiple shooter for CR3BP spatial orbits
 
 Author: Jonathan Richmond
 C: 2/26/25
