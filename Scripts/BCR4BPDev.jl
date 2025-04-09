@@ -3,14 +3,14 @@ Script for BCR4BP code development
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 3/26/25
+U: 4/9/25
 """
 module BCR4BPDev
 println()
 
 using MBD, MATLAB, SPICE
 
-include("../Targeters/PlanarPerpJC.jl")
+include("../CR3BPTargeters/PlanarPerpJC.jl")
 include("../Utilities/Export.jl")
 
 SPICE.furnsh("SPICEKernels/naif0012.tls", "SPICEKernels/de430.bsp", "SPICEKernels/de440.bsp")
@@ -31,11 +31,11 @@ B1 = systemData.primaryData[4]
 
 propagator = MBD.Propagator()
 CR3BPTargeter = PlanarPerpJCTargeter(CR3BPDynamicsModel)
-CR3BPOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, "FamilyData/EML1Lyapunovs.csv", "JC", 3.0)
+CR3BPOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, "FamilyData/EML1Lyapunovs.csv", "JC", 3.175)
 println("\nCR3BP Orbit:\n\tState:$(CR3BPOrbit.initialCondition)\n\tPeriod: $(CR3BPOrbit.period)\n\tJC: $(getJacobiConstant(CR3BPOrbit))\n\tStability: $(getStabilityIndex(CR3BPOrbit))")
 orbitArc::MBD.CR3BPArc = propagate(propagator, CR3BPOrbit.initialCondition, collect(range(0, 1.5*CR3BPOrbit.period, 1001)), CR3BPDynamicsModel)
 
-arcEM::MBD.BCR4BP12Arc = propagate(propagator, push!(copy(CR3BPOrbit.initialCondition), pi*1/2), collect(range(0, 1.5*CR3BPOrbit.period, 1001)), EMDynamicsModel)
+arcEM::MBD.BCR4BP12Arc = propagate(propagator, push!(copy(CR3BPOrbit.initialCondition), pi*0/2), collect(range(0, 6.791174129196576, 1001)), EMDynamicsModel)
 nStates::Int64 = getStateCount(arcEM)
 xEM::Vector{Float64} = zeros(Float64, nStates)
 yEM::Vector{Float64} = zeros(Float64, nStates)
@@ -75,7 +75,7 @@ for s::Int64 in 1:nStates
     thetaMSB1[s] = statesSB1[s][7]
 end
 
-arcSB1::MBD.BCR4BP41Arc = propagate(propagator, statesSB1[1], [0, 1.5*CR3BPOrbit.period*get12CharTime(systemData)/get41CharTime(systemData)], SB1DynamicsModel)
+arcSB1::MBD.BCR4BP41Arc = propagate(propagator, statesSB1[1], [0, 6.791174129196576*get12CharTime(systemData)/get41CharTime(systemData)], SB1DynamicsModel)
 nStates_v::Int64 = getStateCount(arcSB1)
 xSB1_v::Vector{Float64} = zeros(Float64, nStates_v)
 ySB1_v::Vector{Float64} = zeros(Float64, nStates_v)
@@ -189,7 +189,7 @@ for s::Int64 in 1:nStates_v
 end
 println("Initial Moon Angle: $(thetaMSB1_v2[1])")
 
-thetaM::Float64 = (pi-getStateByIndex(arcEM, 1)[7] > 0) ? (pi-getStateByIndex(arcEM, 1)[7]) : (3*pi-getStateByIndex(arcEM, 1)[7])
+thetaM::Float64 = (pi-getStateByIndex(arcEM, 1)[7] >= 0) ? (pi-getStateByIndex(arcEM, 1)[7]) : (3*pi-getStateByIndex(arcEM, 1)[7])
 initialEpochTimeSB1::Float64 = getEpochTime(SB1DynamicsModel, "ECLIPJ2000", "Jan 10 2030", thetaM)
 println("Initial epoch check 2: $(SPICE.et2utc(initialEpochTimeSB1, :C, 0))")
 
@@ -237,6 +237,27 @@ for s::Int64 in 1:nStates
     zdotSEclipJ2000[s] = statesSEclipJ2000[s][6]
 end
 
+xE1::Vector{Float64} = zeros(Float64, nStates)
+yE1::Vector{Float64} = zeros(Float64, nStates)
+zE1::Vector{Float64} = zeros(Float64, nStates)
+xdotE1::Vector{Float64} = zeros(Float64, nStates)
+ydotE1::Vector{Float64} = zeros(Float64, nStates)
+zdotE1::Vector{Float64} = zeros(Float64, nStates)
+xE2::Vector{Float64} = zeros(Float64, nStates)
+yE2::Vector{Float64} = zeros(Float64, nStates)
+zE2::Vector{Float64} = zeros(Float64, nStates)
+xdotE2::Vector{Float64} = zeros(Float64, nStates)
+ydotE2::Vector{Float64} = zeros(Float64, nStates)
+zdotE2::Vector{Float64} = zeros(Float64, nStates)
+for th::Int64 = 1:nStates
+    E1::Vector{Float64} = getInstantaneousEquilibriumPoint(EMDynamicsModel, 1, thetaSEM[th])
+    E2::Vector{Float64} = getInstantaneousEquilibriumPoint(EMDynamicsModel, 2, thetaSEM[th])
+    xE1[th] = E1[1]
+    yE1[th] = E1[2]
+    xE2[th] = E2[1]
+    yE2[th] = E2[2]
+end
+
 mf = MATLAB.MatFile("Output/BCR4BPDev.mat", "w")
 exportCR3BPOrbit(CR3BPOrbit, CR3BPDynamicsModel, mf, :orbitCR3BP)
 exportCR3BPTrajectory(xCR3BPEclipJ2000, yCR3BPEclipJ2000, zCR3BPEclipJ2000, xdotCR3BPEclipJ2000, ydotCR3BPEclipJ2000, zdotCR3BPEclipJ2000, orbitArc.times, mf, :trajCR3BPEclipJ2000)
@@ -251,6 +272,8 @@ exportBCR4BP12Trajectory(xEM_v2, yEM_v2, zEM_v2, xdotEM_v2, ydotEM_v2, zdotEM_v2
 exportBCR4BP41Trajectory(xSB1EEclipJ2000, ySB1EEclipJ2000, zSB1EEclipJ2000, xdotSB1EEclipJ2000, ydotSB1EEclipJ2000, zdotSB1EEclipJ2000, thetaMSB1_v, epochTimesSB1, mf, :trajBCR4BPSB1EEclipJ2000)
 exportBCR4BP12Trajectory(xSB1_v2, ySB1_v2, zSB1_v2, xdotSB1_v2, ydotSB1_v2, zdotSB1_v2, thetaMSB1_v2, timesSB1_v2, mf, :validBCR4BPSB12)
 exportBCR4BP12Trajectory(xSEclipJ2000, ySEclipJ2000, zSEclipJ2000, xdotSEclipJ2000, ydotSEclipJ2000, zdotSEclipJ2000, thetaSEM, epochTimes, mf, :trajBCR4BPSEclipJ2000)
+exportBCR4BP12Trajectory(xE1, yE1, zE1, xdotE1, ydotE1, zdotE1, thetaSEM, tEM, mf, :E1BCR4BPEM)
+exportBCR4BP12Trajectory(xE2, yE2, zE2, xdotE2, ydotE2, zdotE2, thetaSEM, tEM, mf, :E2BCR4BPEM)
 MATLAB.close(mf)
 
 SPICE.kclear()
