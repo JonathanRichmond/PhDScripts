@@ -10,7 +10,7 @@ println()
 
 using MBD, MATLAB
 
-include("../Targeters/PlanarPerpJC.jl")
+include("../CR3BPTargeters/PlanarPerpJC.jl")
 include("../Utilities/Export.jl")
 
 systemData = MBD.CR3BPSystemData("Earth", "Moon")

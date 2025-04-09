@@ -1,5 +1,5 @@
 """
-Jacobi constant perpendicular crossing targeter for planar orbits
+Jacobi constant perpendicular crossing targeter for CR3BP planar orbits
 
 Author: Jonathan Richmond
 C: 2/4/25
