@@ -8,7 +8,7 @@ C: 4/9/25
 using MBD
 
 export PlanarPerpP12Targeter
-export correct, propagateState#, getIndividualPeriodicOrbit, getMonodromy, getPeriod, interpOrbit
+export correct, propagateState, getPeriod#, getIndividualPeriodicOrbit, getMonodromy, interpOrbit
 
 """
     PlanarPerpP12Targeter(dynamicsModel)
@@ -42,7 +42,7 @@ Return corrected BCR4BP P1-P2 multiple shooter problem object
 function correct(targeter::PlanarPerpP12Targeter, q0::Vector{Float64}, targetP::Float64, tol::Float64 = 1E-11)
     halfPeriod::Float64 = targetP/2
     qPCGuess::Vector{Float64} = propagateState(targeter, q0, [0, halfPeriod])
-    originNode = MBD.BCR4BP12Node(tSpan[1], q0, targeter.dynamicsModel)
+    originNode = MBD.BCR4BP12Node(0.0, q0, targeter.dynamicsModel)
     originNode.state.name = "Initial State"
     setFreeVariableMask!(originNode.state, [true, false, false, false, true, false, false])
     terminalNode = MBD.BCR4BP12Node(halfPeriod, qPCGuess, targeter.dynamicsModel)
@@ -54,10 +54,23 @@ function correct(targeter::PlanarPerpP12Targeter, q0::Vector{Float64}, targetP::
     addConstraint!(problem, MBD.BCR4BP12ContinuityConstraint(segment))
     addConstraint!(problem, MBD.BCR4BP12StateConstraint(terminalNode, [2, 4], [0.0, 0.0]))
     shooter = MBD.BCR4BP12MultipleShooter(tol)
-    shooter.printProgress = true
+    # shooter.printProgress = true
     solution::MBD.BCR4BP12MultipleShooterProblem = MBD.solve!(shooter, problem)
 
     return solution
+end
+
+"""
+    getPeriod(targeter, solution)
+
+Return orbit period
+
+# Arguments
+- `targeter::PlanarPerpP12Targeter`: BCR4BP P1-P2 planar perpendicular crossing period targeter object
+- `solution::BR4BP12MultipleShooterProblem`: Solved BCR4BP P1-P2 multiple shooter problem object
+"""
+function getPeriod(targeter::PlanarPerpP12Targeter, solution::MBD.BCR4BP12MultipleShooterProblem)
+    return 2*solution.segments[1].TOF.data[1]
 end
 
 """
