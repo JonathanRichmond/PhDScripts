@@ -10,8 +10,27 @@ println()
 
 using MBD, MATLAB, SPICE
 
+include("../BCR4BPTargeters/PlanarPerpP.jl")
 include("../CR3BPTargeters/PlanarPerpJC.jl")
 include("../Utilities/Export.jl")
+
+function homotopy(systemData::MBD.BCR4BPSystemData, targeter::PlanarPerpP12Targeter, initialStateGuess::Vector{Float64}, targetP::Float64, tol::Float64 = 1E-11)
+    SunGravParam::Float64 = copy(systemData.primaryData[3].gravParam)
+    systemData.primaryData[3].gravParam = 0.0
+    solution::MBD.BCR4BP12MultipleShooterProblem = correct(targeter, initialStateGuess, targetP, tol)
+    println("\nConverged CR3BP L1 Orbit:\n\tState:$(solution.nodes[1].state.data[1:7])\n\tPeriod: $(getPeriod(targeter, solution))")
+    
+    epsilon = 0.0
+    while epsilon < 1
+        epsilon += 0.001
+        systemData.primaryData[3].gravParam = epsilon*SunGravParam
+        initialStateGuess = solution.nodes[1].state.data[1:7]
+        solution = correct(targeter, initialStateGuess, targetP, tol)
+        # println("\nConverged Homotopy Orbit:\n\tState:$(solution.nodes[1].state.data[1:7])")
+    end
+
+    return solution
+end
 
 SPICE.furnsh("SPICEKernels/naif0012.tls", "SPICEKernels/de430.bsp", "SPICEKernels/de440.bsp")
 
@@ -29,6 +48,7 @@ B1 = systemData.primaryData[4]
 (get12CharLength(systemData) == getCharLength(EMSystemData)) && (get12CharMass(systemData) == getCharMass(EMSystemData)) && (get12CharTime(systemData) == getCharTime(EMSystemData)) && (get12MassRatio(systemData) == getMassRatio(EMSystemData)) || ArgumentError("Earth-Moon system does not match between models")
 (get41CharLength(systemData) == getCharLength(SB1SystemData)) && (get41CharMass(systemData) == getCharMass(SB1SystemData)) && (get41CharTime(systemData) == getCharTime(SB1SystemData)) && (get41MassRatio(systemData) == getMassRatio(SB1SystemData)) || ArgumentError("Sun-B1 system does not match between models")
 
+targeter = PlanarPerpP12Targeter(EMDynamicsModel)
 propagator = MBD.Propagator()
 CR3BPTargeter = PlanarPerpJCTargeter(CR3BPDynamicsModel)
 CR3BPOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, "FamilyData/EML1Lyapunovs.csv", "JC", 3.175)
@@ -258,6 +278,29 @@ for th::Int64 = 1:nStates
     yE2[th] = E2[2]
 end
 
+initialStateGuess::Vector{Float64} = append!(getEquilibriumPoint(CR3BPDynamicsModel, 1), [0.0, 0.0, 0.0, 0.0])
+targetP::Float64 = getSynodicPeriod(EMDynamicsModel)
+solution::MBD.BCR4BP12MultipleShooterProblem = homotopy(systemData, targeter, initialStateGuess, targetP, 1E-8)
+refinedSolution::MBD.BCR4BP12MultipleShooterProblem = correct(targeter, solution.nodes[1].state.data[1:7], targetP, 1E-10)
+println("\nConverged BCR4BP L1 Orbit:\n\tState:$(refinedSolution.nodes[1].state.data[1:7])\n\tPeriod: $(getPeriod(targeter, refinedSolution))")
+arcL1::MBD.BCR4BP12Arc = propagate(propagator, refinedSolution.nodes[1].state.data[1:7], tEM, EMDynamicsModel)
+nStatesL1::Int64 = getStateCount(arcL1)
+xL1::Vector{Float64} = Vector{Float64}(undef, nStatesL1)
+yL1::Vector{Float64} = Vector{Float64}(undef, nStatesL1)
+zL1::Vector{Float64} = Vector{Float64}(undef, nStatesL1)
+xdotL1::Vector{Float64} = Vector{Float64}(undef, nStatesL1)
+ydotL1::Vector{Float64} = Vector{Float64}(undef, nStatesL1)
+zdotL1::Vector{Float64} = Vector{Float64}(undef, nStatesL1)
+for s::Int64 in 1:nStatesL1
+    state::Vector{Float64} = getStateByIndex(arcL1, s)
+    xL1[s] = state[1]
+    yL1[s] = state[2]
+    zL1[s] = state[3]
+    xdotL1[s] = state[4]
+    ydotL1[s] = state[5]
+    zdotL1[s] = state[6]
+end
+
 mf = MATLAB.MatFile("Output/BCR4BPDev.mat", "w")
 exportCR3BPOrbit(CR3BPOrbit, CR3BPDynamicsModel, mf, :orbitCR3BP)
 exportCR3BPTrajectory(xCR3BPEclipJ2000, yCR3BPEclipJ2000, zCR3BPEclipJ2000, xdotCR3BPEclipJ2000, ydotCR3BPEclipJ2000, zdotCR3BPEclipJ2000, orbitArc.times, mf, :trajCR3BPEclipJ2000)
@@ -274,6 +317,7 @@ exportBCR4BP12Trajectory(xSB1_v2, ySB1_v2, zSB1_v2, xdotSB1_v2, ydotSB1_v2, zdot
 exportBCR4BP12Trajectory(xSEclipJ2000, ySEclipJ2000, zSEclipJ2000, xdotSEclipJ2000, ydotSEclipJ2000, zdotSEclipJ2000, thetaSEM, epochTimes, mf, :trajBCR4BPSEclipJ2000)
 exportBCR4BP12Trajectory(xE1, yE1, zE1, xdotE1, ydotE1, zdotE1, thetaSEM, tEM, mf, :E1BCR4BPEM)
 exportBCR4BP12Trajectory(xE2, yE2, zE2, xdotE2, ydotE2, zdotE2, thetaSEM, tEM, mf, :E2BCR4BPEM)
+exportBCR4BP12Trajectory(xL1, yL1, zL1, xdotL1, ydotL1, zdotL1, thetaSEM, tEM, mf, :L1Orbit)
 MATLAB.close(mf)
 
 SPICE.kclear()
