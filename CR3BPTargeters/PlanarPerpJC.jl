@@ -3,7 +3,7 @@ Jacobi constant perpendicular crossing targeter for CR3BP planar orbits
 
 Author: Jonathan Richmond
 C: 2/4/25
-U: 2/26/25
+U: 4/15/25
 """
 
 using MBD, CSV, DataFrames, LinearAlgebra, StaticArrays
@@ -56,6 +56,7 @@ function correct(targeter::PlanarPerpJCTargeter, q0::Vector{Float64}, tSpan::Vec
     addConstraint!(problem, MBD.CR3BPContinuityConstraint(segment))
     addConstraint!(problem, MBD.JacobiConstraint(originNode, targetJC))
     addConstraint!(problem, MBD.CR3BPStateConstraint(terminalNode, [2, 4], [0.0, 0.0]))
+    checkJacobian(problem)
     shooter = MBD.CR3BPMultipleShooter(tol)
     # shooter.printProgress = true
     solution::MBD.CR3BPMultipleShooterProblem = MBD.solve!(shooter, problem)

@@ -3,6 +3,7 @@ Period perpendicular crossing targeter for BCR4BP planar orbits
 
 Author: Jonathan Richmond
 C: 4/9/25
+U: 4/15/25
 """
 
 using MBD
@@ -53,6 +54,7 @@ function correct(targeter::PlanarPerpP12Targeter, q0::Vector{Float64}, targetP::
     addSegment!(problem, segment)
     addConstraint!(problem, MBD.BCR4BP12ContinuityConstraint(segment))
     addConstraint!(problem, MBD.BCR4BP12StateConstraint(terminalNode, [2, 4], [0.0, 0.0]))
+    checkJacobian(problem)
     shooter = MBD.BCR4BP12MultipleShooter(tol)
     # shooter.printProgress = true
     solution::MBD.BCR4BP12MultipleShooterProblem = MBD.solve!(shooter, problem)
