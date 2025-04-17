@@ -3,13 +3,13 @@ Jacobi constant perpendicular crossing multiple shooter for CR3BP spatial orbits
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 4/2/25
+U: 4/16/25
 """
 
-using MBD, CSV, DataFrames, LinearAlgebra, StaticArrays
+using MBD, CSV, DataFrames, LinearAlgebra, SparseArrays, StaticArrays
 
 export SpatialPerpJCMSTargeter
-export correct, doContinuation!, getPeriod, propagateState, tryConverging!#, getIndividualPeriodicOrbit, getMonodromy, interpOrbit
+export correct, doContinuation!, getMonodromy, getPeriod, propagateState, tryConverging!#, getEigenData, getIndividualPeriodicOrbit, interpOrbit
 
 """
     SpatialPerpJCMSTargeter(dynamicsModel)
@@ -131,6 +131,92 @@ function doContinuation!(targeter::SpatialPerpJCMSTargeter, multipleShooterConti
     return multipleShooterContinuationEngine.dataInProgress.family
 end
 
+# """
+#     getEigenData(targeter, solution)
+
+# Return orbit eigenvalues and -vectors
+
+# # Arguments
+# - `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
+# - `solution::CR3BPMultipleShooterProblem`: Solved CR3BP multiple shooter problem object
+# """
+# function getEigenDecomp(targeter::SpatialPerpJCMSTargeter, solution::MBD.CR3BPMultipleShooterProblem)
+    # propagator = MBD.Propagator(equationType = MBD.STM)
+    # nStates::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
+    # nSegs::Int64 = length(solution.segments)
+    # STMs::Vector{StaticArrays.SMatrix{6, 6, Float64}} = []
+    # for s::Int64 = 1:nSegs
+    #     propSegment::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].originNode.state.data, MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel)
+    #     endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
+    #     STM::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(reshape(endState[7:42], (6,6)))
+    #     push!(STMs, STM)
+    # end
+    # for s::Int64 = nSegs:-1:1
+    #     propSegment::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].terminalNode.state.data.*[1, -1, 1, -1, 1, -1], MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel)
+    #     endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
+    #     STM::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(reshape(endState[7:42], (6,6)))
+    #     push!(STMs, STM)
+    # end
+    # rows::Vector{Int64} = []
+    # cols::Vector{Int64} = []
+    # vals::Vector{Float64} = []
+    # r_offset::Int64 = 0
+    # c_offset::Int64 = 0
+    # for S::StaticArrays.SMatrix{6, 6, Float64} in STMs
+    #     for i::Int64 = 1:6, j::Int64 = 1:6
+    #         push!(rows, r_offset+i)
+    #         push!(cols, c_offset+j)
+    #         push!(vals, S[i,j])
+    #     end
+    #     r_offset += 6
+    #     c_offset += 6
+    # end
+    # Phi::SparseArrays.SparseMatrixCSC{Float64, Int64} = SparseArrays.sparse(rows, cols, vals)
+    # offI::SparseArrays.SparseMatrixCSC{Float64, Int64} = SparseArrays.spzeros(2*nSegs*6, 2*nSegs*6)
+    # for i::Int64 = 1:2*nSegs-1
+    #     offI[(6*(i-1)+1):(6*i),(6*i+1):(6*(i+1))] = SparseArrays.sparse(LinearAlgebra.I, 6, 6)
+    # end
+    # offI[(2*nSegs*6-5):(2*nSegs*6),1:6] = SparseArrays.sparse(LinearAlgebra.I, 6, 6)
+    # P::Matrix{Float64} = offI \ Matrix(Phi)
+    # E::LinearAlgebra.Eigen = LinearAlgebra.eigen(P)
+
+    # return (Vector{Complex{Float64}}(E.values[1:6].^(2*nSegs)), Matrix{Complex{Float64}}(E.vectors[1:6,1:6]))
+# end
+
+"""
+    getMonodromy(targeter, solution)
+
+Return orbit monodromy matrix
+
+# Arguments
+- `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
+- `solution::CR3BPMultipleShooterProblem`: Solved CR3BP multiple shooter problem object
+"""
+function getMonodromy(targeter::SpatialPerpJCMSTargeter, solution::MBD.CR3BPMultipleShooterProblem)
+    propagator = MBD.Propagator(equationType = MBD.STM)
+    nStates::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
+    nSegs::Int64 = length(solution.segments)
+    STMs::Vector{StaticArrays.SMatrix{6, 6, Float64}} = []
+    for s::Int64 = 1:nSegs
+        propSegment::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].originNode.state.data, MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel)
+        endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
+        STM::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(reshape(endState[7:42], (6,6)))
+        push!(STMs, STM)
+    end
+    for s::Int64 = nSegs:-1:1
+        propSegment::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].terminalNode.state.data.*[1, -1, 1, -1, 1, -1], MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel)
+        endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
+        STM::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(reshape(endState[7:42], (6,6)))
+        push!(STMs, STM)
+    end
+    M::Matrix{Float64} = Matrix(STMs[end])
+    for s::Int64 = (2*nSegs-1):-1:1
+        M *= STMs[s]
+    end
+
+    return M
+end
+
 """
     getPeriod(targeter, segments)
 
@@ -142,7 +228,7 @@ Return orbit period
 """
 function getPeriod(targeter::SpatialPerpJCMSTargeter, segments::Vector{MBD.CR3BPSegment})
     TOF::Float64 = 0.0
-    for s = 1:length(segments)
+    for s::Int64 = 1:length(segments)
         TOF += segments[s].TOF.data[1]
     end
 
@@ -160,7 +246,7 @@ Return orbit period
 """
 function getPeriod(targeter::SpatialPerpJCMSTargeter, solution::MBD.CR3BPMultipleShooterProblem)
     TOF::Float64 = 0.0
-    for s = 1:length(solution.segments)
+    for s::Int64 = 1:length(solution.segments)
         TOF += solution.segments[s].TOF.data[1]
     end
 
