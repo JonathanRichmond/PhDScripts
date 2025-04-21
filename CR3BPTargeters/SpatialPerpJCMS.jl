@@ -3,13 +3,13 @@ Jacobi constant perpendicular crossing multiple shooter for CR3BP spatial orbits
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 4/16/25
+U: 4/21/25
 """
 
-using MBD, CSV, DataFrames, LinearAlgebra, SparseArrays, StaticArrays
+using MBD, CSV, DataFrames, LinearAlgebra, SparseArrays, StaticArrays, Statistics
 
 export SpatialPerpJCMSTargeter
-export correct, doContinuation!, getMonodromy, getPeriod, propagateState, tryConverging!#, getEigenData, getIndividualPeriodicOrbit, interpOrbit
+export correct, doContinuation!, getApproxEigenData, getMonodromy, getPeriod, propagateState, tryConverging!#, getIndividualPeriodicOrbit, interpOrbit
 
 """
     SpatialPerpJCMSTargeter(dynamicsModel)
@@ -131,57 +131,89 @@ function doContinuation!(targeter::SpatialPerpJCMSTargeter, multipleShooterConti
     return multipleShooterContinuationEngine.dataInProgress.family
 end
 
-# """
-#     getEigenData(targeter, solution)
+"""
+    getApproxEigenData(targeter, solution; clusterTol, complexTol)
 
-# Return orbit eigenvalues and -vectors
+Return approximate orbit eigenvalues and -vectors
 
-# # Arguments
-# - `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
-# - `solution::CR3BPMultipleShooterProblem`: Solved CR3BP multiple shooter problem object
-# """
-# function getEigenDecomp(targeter::SpatialPerpJCMSTargeter, solution::MBD.CR3BPMultipleShooterProblem)
-    # propagator = MBD.Propagator(equationType = MBD.STM)
-    # nStates::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
-    # nSegs::Int64 = length(solution.segments)
-    # STMs::Vector{StaticArrays.SMatrix{6, 6, Float64}} = []
-    # for s::Int64 = 1:nSegs
-    #     propSegment::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].originNode.state.data, MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel)
-    #     endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
-    #     STM::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(reshape(endState[7:42], (6,6)))
-    #     push!(STMs, STM)
-    # end
-    # for s::Int64 = nSegs:-1:1
-    #     propSegment::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].terminalNode.state.data.*[1, -1, 1, -1, 1, -1], MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel)
-    #     endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
-    #     STM::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(reshape(endState[7:42], (6,6)))
-    #     push!(STMs, STM)
-    # end
-    # rows::Vector{Int64} = []
-    # cols::Vector{Int64} = []
-    # vals::Vector{Float64} = []
-    # r_offset::Int64 = 0
-    # c_offset::Int64 = 0
-    # for S::StaticArrays.SMatrix{6, 6, Float64} in STMs
-    #     for i::Int64 = 1:6, j::Int64 = 1:6
-    #         push!(rows, r_offset+i)
-    #         push!(cols, c_offset+j)
-    #         push!(vals, S[i,j])
-    #     end
-    #     r_offset += 6
-    #     c_offset += 6
-    # end
-    # Phi::SparseArrays.SparseMatrixCSC{Float64, Int64} = SparseArrays.sparse(rows, cols, vals)
-    # offI::SparseArrays.SparseMatrixCSC{Float64, Int64} = SparseArrays.spzeros(2*nSegs*6, 2*nSegs*6)
-    # for i::Int64 = 1:2*nSegs-1
-    #     offI[(6*(i-1)+1):(6*i),(6*i+1):(6*(i+1))] = SparseArrays.sparse(LinearAlgebra.I, 6, 6)
-    # end
-    # offI[(2*nSegs*6-5):(2*nSegs*6),1:6] = SparseArrays.sparse(LinearAlgebra.I, 6, 6)
-    # P::Matrix{Float64} = offI \ Matrix(Phi)
-    # E::LinearAlgebra.Eigen = LinearAlgebra.eigen(P)
+# Arguments
+- `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
+- `solution::CR3BPMultipleShooterProblem`: Solved CR3BP multiple shooter problem object
+- `clusterTol::Float64`: Clustering relative tolerance (default = 1E-5)
+- `complexTol::Float64`: Complex number relative tolerance (default = 1E-5)
+"""
+function getApproxEigenData(targeter::SpatialPerpJCMSTargeter, solution::MBD.CR3BPMultipleShooterProblem, clusterTol::Float64 = 1E-5, complexTol::Float64 = 1E-5)
+    propagator = MBD.Propagator(equationType = MBD.STM)
+    nStates::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
+    nSegs::Int64 = length(solution.segments)
+    STMs::Vector{StaticArrays.SMatrix{6, 6, Float64}} = []
+    for s::Int64 = 1:nSegs
+        propSegment::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].originNode.state.data, MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel)
+        endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
+        STM::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(reshape(endState[7:42], (6,6)))
+        push!(STMs, STM)
+    end
+    for s::Int64 = nSegs:-1:1
+        propSegment::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].terminalNode.state.data.*[1, -1, 1, -1, 1, -1], MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel)
+        endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
+        STM::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(reshape(endState[7:42], (6,6)))
+        push!(STMs, STM)
+    end
+    rows::Vector{Int64} = []
+    cols::Vector{Int64} = []
+    vals::Vector{Float64} = []
+    r_offset::Int64 = 0
+    c_offset::Int64 = 0
+    for S::StaticArrays.SMatrix{6, 6, Float64} in STMs
+        for i::Int64 = 1:6, j::Int64 = 1:6
+            push!(rows, r_offset+i)
+            push!(cols, c_offset+j)
+            push!(vals, S[i,j])
+        end
+        r_offset += 6
+        c_offset += 6
+    end
+    Phi::SparseArrays.SparseMatrixCSC{Float64, Int64} = SparseArrays.sparse(rows, cols, vals)
+    offI::SparseArrays.SparseMatrixCSC{Float64, Int64} = SparseArrays.spzeros(2*nSegs*6, 2*nSegs*6)
+    for i::Int64 = 1:2*nSegs-1
+        offI[(6*(i-1)+1):(6*i),(6*i+1):(6*(i+1))] = SparseArrays.sparse(LinearAlgebra.I, 6, 6)
+    end
+    offI[(2*nSegs*6-5):(2*nSegs*6),1:6] = SparseArrays.sparse(LinearAlgebra.I, 6, 6)
+    E::LinearAlgebra.Eigen = LinearAlgebra.eigen(offI\Matrix(Phi))
+    Lambda::Vector{Complex{Float64}} = E.values.^(2*nSegs)
+    indices::Vector{Int64} = sortperm(Lambda, by = x -> abs(real(x)))
+    sortedLambda::Vector{Complex{Float64}} = Lambda[indices]
+    sortedV::Matrix{Complex{Float64}} = E.vectors[1:6,indices]
+    clusters::Vector{Vector{Tuple{Complex{Float64}, Vector{Complex{Float64}}}}} = [[(sortedLambda[1], sortedV[:,1])]]
+    for e::Int64 in 2:(2*nSegs*6)
+        lambda::Complex{Float64} = sortedLambda[e]
+        v::Vector{Complex{Float64}} = sortedV[:,e]
+        added::Bool = false
+        for c::Vector{Tuple{Complex{Float64}, Vector{Complex{Float64}}}} in clusters
+            lambdas::Vector{Complex{Float64}} = [x[1] for x in c]
+            isConjugate::Bool = (any(x -> isapprox(lambda, conj(x); atol = 1E-8), lambdas) && (abs(imag(lambda)) > complexTol*max(abs(real(lambda)), 1E-12)))
+            if (abs(real(lambda)-real(lambdas[end]))/max(abs(real(lambda)), abs(real(lambdas[end])), 1E-12) < clusterTol) && !isConjugate
+                push!(c, (lambda, v))
+                added = true
+                break
+            end
+        end
+        !added && push!(clusters, [(lambda, v)])
+    end
+    Lambda_avg::Vector{Complex{Float64}} = Vector{Float64}(undef, length(clusters))
+    V_avg::Matrix{Complex{Float64}} = Matrix{Float64}(undef, 6, length(clusters))
+    for c::Int64 = 1:length(clusters)
+        lambdas::Vector{Complex{Float64}} = [x[1] for x in clusters[c]]
+        vs::Vector{Vector{Complex{Float64}}} = [x[2] for x in clusters[c]]
+        lambda_avg::Complex{Float64} = Statistics.mean(lambdas)
+        index::Int64 = argmin(abs.(lambdas.-lambda_avg))
+        v_avg::Vector{Complex{Float64}} = vs[index]
+        Lambda_avg[c] = lambda_avg
+        V_avg[:,c] = v_avg
+    end
 
-    # return (Vector{Complex{Float64}}(E.values[1:6].^(2*nSegs)), Matrix{Complex{Float64}}(E.vectors[1:6,1:6]))
-# end
+    return (Lambda_avg, V_avg)
+end
 
 """
     getMonodromy(targeter, solution)

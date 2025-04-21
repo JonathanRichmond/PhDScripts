@@ -967,7 +967,7 @@ version = "0.9.0"
 
 [[deps.MBD]]
 deps = ["CSV", "Combinatorics", "DataFrames", "DifferentialEquations", "LightXML", "LinearAlgebra", "SPICE", "StaticArrays", "UpdateJulia"]
-git-tree-sha1 = "da775cb27127729692d3d017027b103b64cd70ad"
+git-tree-sha1 = "89c677541f26a929132121abe887cca23f8db21c"
 repo-rev = "richmo11-memoryChanges"
 repo-url = "https://github.com/JonathanRichmond/MBD.jl.git"
 uuid = "994ce0ec-d6e5-428b-b4b3-7b10f5a0848a"
@@ -1585,9 +1585,9 @@ version = "0.2.4"
 
 [[deps.SciMLBase]]
 deps = ["ADTypes", "Accessors", "ArrayInterface", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "Moshi", "PrecompileTools", "Preferences", "Printf", "RecipesBase", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLOperators", "SciMLStructures", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface"]
-git-tree-sha1 = "f2db9ab9d33130df3be35be9438da51a3416d528"
+git-tree-sha1 = "1f7cf417da3771b98f0e3f32ce0bb813e9fe91fa"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "2.84.0"
+version = "2.85.0"
 
     [deps.SciMLBase.extensions]
     SciMLBaseChainRulesCoreExt = "ChainRulesCore"
