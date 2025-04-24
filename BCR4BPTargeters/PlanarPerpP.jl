@@ -3,13 +3,13 @@ Period perpendicular crossing targeter for BCR4BP planar orbits
 
 Author: Jonathan Richmond
 C: 4/9/25
-U: 4/15/25
+U: 4/23/25
 """
 
-using MBD
+using MBD, StaticArrays
 
 export PlanarPerpP12Targeter
-export correct, propagateState, getPeriod#, getIndividualPeriodicOrbit, getMonodromy, interpOrbit
+export correct, getMonodromy, getPeriod, propagateState#, getIndividualPeriodicOrbit, interpOrbit
 
 """
     PlanarPerpP12Targeter(dynamicsModel)
@@ -30,7 +30,7 @@ struct PlanarPerpP12Targeter <: MBD.AbstractTargeter
 end
 
 """
-    correct(targeter, q0, targetP; tol)
+    correct(targeter, q0, targetP, revs; tol, JTol)
 
 Return corrected BCR4BP P1-P2 multiple shooter problem object
 
@@ -38,9 +38,11 @@ Return corrected BCR4BP P1-P2 multiple shooter problem object
 - `targeter::PlanarPerpP12Targeter`: BCR4BP P1-P2 planar perpendicular crossing period targeter object
 - `q0::Vector{Float64}`: Initial state guess [ndim]
 - `targetP::Float64`: Target period [ndim]
+- `revs::Int64`: Number of synodic revolutions
 - `tol::Float64`: Convergence tolerance (default = 1E-11)
+- `JTol::Float64`: Jacobian accuracy tolerance (default = 2E-3)
 """
-function correct(targeter::PlanarPerpP12Targeter, q0::Vector{Float64}, targetP::Float64, tol::Float64 = 1E-11)
+function correct(targeter::PlanarPerpP12Targeter, q0::Vector{Float64}, targetP::Float64, revs::Int64; tol::Float64 = 1E-11, JTol::Float64 = 2E-3)
     halfPeriod::Float64 = targetP/2
     qPCGuess::Vector{Float64} = propagateState(targeter, q0, [0, halfPeriod])
     originNode = MBD.BCR4BP12Node(0.0, q0, targeter.dynamicsModel)
@@ -49,17 +51,36 @@ function correct(targeter::PlanarPerpP12Targeter, q0::Vector{Float64}, targetP::
     terminalNode = MBD.BCR4BP12Node(halfPeriod, qPCGuess, targeter.dynamicsModel)
     terminalNode.state.name = "Target State"
     segment = MBD.BCR4BP12Segment(halfPeriod, originNode, terminalNode)
-    setFreeVariableMask!(segment.TOF, [false])
     problem = MBD.BCR4BP12MultipleShooterProblem()
     addSegment!(problem, segment)
     addConstraint!(problem, MBD.BCR4BP12ContinuityConstraint(segment))
-    addConstraint!(problem, MBD.BCR4BP12StateConstraint(terminalNode, [2, 4], [0.0, 0.0]))
-    checkJacobian(problem)
+    addConstraint!(problem, MBD.BCR4BP12StateConstraint(terminalNode, [2, 4, 7], [0, 0, q0[7]-revs*pi]))
+    # checkJacobian(problem; relTol = JTol)
     shooter = MBD.BCR4BP12MultipleShooter(tol)
     # shooter.printProgress = true
     solution::MBD.BCR4BP12MultipleShooterProblem = MBD.solve!(shooter, problem)
 
     return solution
+end
+
+"""
+    getMonodromy(targeter, solution)
+
+Return orbit monodromy matrix
+
+# Arguments
+- `targeter::PlanarPerpP12Targeter`: BCR4BP P1-P2 planar perpendicular crossing period targeter object
+- `solution::BCR4BP12MultipleShooterProblem`: Solved BCR4BP P1-P2 multiple shooter problem object
+"""
+function getMonodromy(targeter::PlanarPerpP12Targeter, solution::MBD.BCR4BP12MultipleShooterProblem)
+    propagator = MBD.Propagator(equationType = MBD.STM)
+    n_simple::Int64 = getStateSize(targeter.dynamicsModel, MBD.SIMPLE)
+    n_STM::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
+    orbit::MBD.BCR4BP12Arc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.nodes[1].state.data, MBD.STM), [0, getPeriod(targeter, solution)], targeter.dynamicsModel)
+    endState::StaticArrays.SVector{n_STM, Float64} = StaticArrays.SVector{n_STM, Float64}(getStateByIndex(orbit, -1))
+    M::Matrix{Float64} = reshape(endState[n_simple+1:n_STM], (n_simple,n_simple))
+
+    return M
 end
 
 """
@@ -69,7 +90,7 @@ Return orbit period
 
 # Arguments
 - `targeter::PlanarPerpP12Targeter`: BCR4BP P1-P2 planar perpendicular crossing period targeter object
-- `solution::BR4BP12MultipleShooterProblem`: Solved BCR4BP P1-P2 multiple shooter problem object
+- `solution::BCR4BP12MultipleShooterProblem`: Solved BCR4BP P1-P2 multiple shooter problem object
 """
 function getPeriod(targeter::PlanarPerpP12Targeter, solution::MBD.BCR4BP12MultipleShooterProblem)
     return 2*solution.segments[1].TOF.data[1]

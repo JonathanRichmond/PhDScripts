@@ -3,12 +3,12 @@ Script for BCR4BP code development
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 4/9/25
+U: 4/21/25
 """
 module BCR4BPDev
 println()
 
-using MBD, MATLAB, SPICE
+using MBD, LinearAlgebra, MATLAB, SPICE
 
 include("../BCR4BPTargeters/PlanarPerpP.jl")
 include("../CR3BPTargeters/PlanarPerpJC.jl")
@@ -277,6 +277,10 @@ for th::Int64 = 1:nStates
     xE2[th] = E2[1]
     yE2[th] = E2[2]
 end
+qdot::Vector{Float64} = evaluateEquations(EMDynamicsModel, MBD.STM, 0.0, appendExtraInitialConditions(EMDynamicsModel, [xE1[1], yE1[1], zE1[1], xdotE1[1], ydotE1[1], zdotE1[1], thetaSEM[1]], MBD.STM))
+A::Matrix{Float64} = reshape(qdot[8:56], (7,7))
+E::LinearAlgebra.Eigen = LinearAlgebra.eigen(A)
+println("\nEigenvalues: $(E.values)")
 
 initialStateGuess::Vector{Float64} = append!(getEquilibriumPoint(CR3BPDynamicsModel, 1), [0.0, 0.0, 0.0, 0.0])
 targetP::Float64 = getSynodicPeriod(EMDynamicsModel)
