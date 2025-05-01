@@ -3,6 +3,7 @@ Script for BCR4BP Earth-Moon planar orbits
 
 Author: Jonathan Richmond
 C: 4/23/25
+U: 5/1/25
 """
 module EMPlanar
 println()
@@ -45,9 +46,8 @@ propagator = MBD.Propagator()
 
 initialStateGuess::Vector{Float64} = append!(getEquilibriumPoint(CR3BPDynamicsModel, 1), [0.0, 0.0, 0.0, 0.0])
 targetP::Float64 = getSynodicPeriod(dynamicsModel)
-solution::MBD.BCR4BP12MultipleShooterProblem = homotopy(systemData, targeter, initialStateGuess, 1; tol = 1E-9)
-refinedSolution::MBD.BCR4BP12MultipleShooterProblem = correct(targeter, solution.nodes[1].state.data[1:7], targetP, 1; tol = 1E-10)
-# refinedSolution::MBD.BCR4BP12MultipleShooterProblem = correct(targeter, [1.005405631673800, 0, 0.181390966578526, 0, -0.090738307446220, 0, 0], 2*targetP, 2, 5E-8)
+solution::MBD.BCR4BP12MultipleShooterProblem = homotopy(systemData, targeter, initialStateGuess, 1)
+refinedSolution::MBD.BCR4BP12MultipleShooterProblem = correct(targeter, solution.nodes[1].state.data[1:7], targetP, 1; tol = 1E-12)
 println("\nConverged BCR4BP Orbit:\n\tState:$(refinedSolution.nodes[1].state.data[1:7])\n\tPeriod: $(getPeriod(targeter, refinedSolution))")
 M::Matrix{Float64} = getMonodromy(targeter, refinedSolution)
 E::LinearAlgebra.Eigen = LinearAlgebra.eigen(M)
