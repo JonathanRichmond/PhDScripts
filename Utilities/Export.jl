@@ -3,11 +3,13 @@ Export utility functions
 
 Author: Jonathan Richmond
 C: 2/19/25
+U: 5/29/25
 """
 
 using MBD, MATLAB
 
-export exportBCR4BP12Trajectory, exportBCR4BP12Trajectory, exportCR3BPOrbit, exportCR3BPTrajectory
+export exportBCR4BP12Trajectory, exportBCR4BP12Trajectory, exportCR3BPFamily, exportCR3BPOrbit
+export exportCR3BPTrajectory
 
 """
     BCR4BP12Traj(x, y, z, xdot, ydot, zdot, theta4, t)
@@ -145,6 +147,18 @@ Export BCR4BP P4-B1 trajectory data to MAT file
 function exportBCR4BP41Trajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta2::Vector{Float64}, t::Vector{Float64}, file::MATLAB.MatFile, name::Symbol)
     traj = BCR4BP41Traj(x, y, z, xdot, ydot, zdot, theta2, t)
     MATLAB.put_variable(file, name, traj)
+end
+
+"""
+    exportCR3BPFamily(family)
+
+Export CR3BP family data to MAT file
+
+# Arguments
+- ``
+"""
+function exportCR3BPFamily(family::MBD.CR3BPOrbitFamily)
+
 end
 
 """
