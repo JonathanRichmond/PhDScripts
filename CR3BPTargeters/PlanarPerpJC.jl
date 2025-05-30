@@ -3,10 +3,10 @@ Jacobi constant perpendicular crossing targeter for CR3BP planar orbits
 
 Author: Jonathan Richmond
 C: 2/4/25
-U: 4/15/25
+U: 5/28/25
 """
 
-using MBD, CSV, DataFrames, LinearAlgebra, StaticArrays
+using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, StaticArrays
 
 export PlanarPerpJCTargeter
 export correct, getIndividualPeriodicOrbit, getMonodromy, getPeriod, interpOrbit, propagateState
@@ -103,9 +103,14 @@ function getMonodromy(targeter::PlanarPerpJCTargeter, solution::MBD.CR3BPMultipl
     propagator = MBD.Propagator(equationType = MBD.STM)
     n_simple::Int64 = getStateSize(targeter.dynamicsModel, MBD.SIMPLE)
     n_STM::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
-    halfOrbit::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.nodes[1].state.data, MBD.STM), [0, solution.segments[1].TOF.data[1]], targeter.dynamicsModel)
+    renormalizeEvent::DifferentialEquations.DiscreteCallback = DifferentialEquations.PeriodicCallback(MBD.renormalize!, pi/10)
+    Rs::Vector{Matrix{Float64}} = []
+    halfOrbit::MBD.CR3BPArc = propagateWithPeriodicEvent(propagator, renormalizeEvent, appendExtraInitialConditions(targeter.dynamicsModel, solution.nodes[1].state.data, MBD.STM), [0, solution.segments[1].TOF.data[1]], targeter.dynamicsModel, [targeter.dynamicsModel, Rs])
     PCState::StaticArrays.SVector{n_STM, Float64} = StaticArrays.SVector{n_STM, Float64}(getStateByIndex(halfOrbit, -1))
-    PCSTM::StaticArrays.SMatrix{n_simple, n_simple, Float64} = StaticArrays.SMatrix{n_simple, n_simple, Float64}(reshape(PCState[n_simple+1:n_STM], (n_simple,n_simple)))
+    PCSTM::Matrix{Float64} = reshape(PCState[n_simple+1:n_STM], (n_simple,n_simple))
+    for R::Matrix{Float64} in reverse(Rs)
+        PCSTM *= R
+    end
     G::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(1.0, 0, 0, 0, 0, 0, 0, -1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, -1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, -1.0)
     Omega::StaticArrays.SMatrix{3, 3, Float64} = StaticArrays.SMatrix{3, 3, Float64}(0, -1.0, 0, 1.0, 0, 0, 0, 0, 0)
     A::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}([zeros(Float64, (3,3)) -1 .*LinearAlgebra.I; LinearAlgebra.I -2 .*Omega])

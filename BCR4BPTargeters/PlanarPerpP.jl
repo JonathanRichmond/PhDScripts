@@ -3,10 +3,10 @@ Period perpendicular crossing targeter for BCR4BP planar orbits
 
 Author: Jonathan Richmond
 C: 4/9/25
-U: 4/23/25
+U: 5/29/25
 """
 
-using MBD, StaticArrays
+using MBD, DifferentialEquations, StaticArrays
 
 export PlanarPerpP12Targeter
 export correct, getMonodromy, getPeriod, propagateState#, getIndividualPeriodicOrbit, interpOrbit
@@ -55,7 +55,7 @@ function correct(targeter::PlanarPerpP12Targeter, q0::Vector{Float64}, targetP::
     addSegment!(problem, segment)
     addConstraint!(problem, MBD.BCR4BP12ContinuityConstraint(segment))
     addConstraint!(problem, MBD.BCR4BP12StateConstraint(terminalNode, [2, 4, 7], [0, 0, q0[7]-revs*pi]))
-    # checkJacobian(problem; relTol = JTol)
+    checkJacobian(problem; relTol = JTol)
     shooter = MBD.BCR4BP12MultipleShooter(tol)
     # shooter.printProgress = true
     solution::MBD.BCR4BP12MultipleShooterProblem = MBD.solve!(shooter, problem)
@@ -76,9 +76,14 @@ function getMonodromy(targeter::PlanarPerpP12Targeter, solution::MBD.BCR4BP12Mul
     propagator = MBD.Propagator(equationType = MBD.STM)
     n_simple::Int64 = getStateSize(targeter.dynamicsModel, MBD.SIMPLE)
     n_STM::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
-    orbit::MBD.BCR4BP12Arc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.nodes[1].state.data, MBD.STM), [0, getPeriod(targeter, solution)], targeter.dynamicsModel)
+    renormalizeEvent::DifferentialEquations.DiscreteCallback = DifferentialEquations.PeriodicCallback(MBD.renormalize!, pi/10)
+    Rs::Vector{Matrix{Float64}} = []
+    orbit::MBD.BCR4BP12Arc = propagateWithPeriodicEvent(propagator, renormalizeEvent, appendExtraInitialConditions(targeter.dynamicsModel, solution.nodes[1].state.data, MBD.STM), [0, getPeriod(targeter, solution)], targeter.dynamicsModel, [targeter.dynamicsModel, Rs])
     endState::StaticArrays.SVector{n_STM, Float64} = StaticArrays.SVector{n_STM, Float64}(getStateByIndex(orbit, -1))
     M::Matrix{Float64} = reshape(endState[n_simple+1:n_STM], (n_simple,n_simple))
+    for R::Matrix{Float64} in reverse(Rs)
+        M *= R
+    end
 
     return M
 end

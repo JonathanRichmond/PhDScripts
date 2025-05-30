@@ -3,10 +3,10 @@ Jacobi constant perpendicular crossing multiple shooter for CR3BP spatial orbits
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 4/21/25
+U: 5/29/25
 """
 
-using MBD, CSV, DataFrames, LinearAlgebra, SparseArrays, StaticArrays, Statistics
+using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, SparseArrays, StaticArrays, Statistics
 
 export SpatialPerpJCMSTargeter
 export correct, doContinuation!, getApproxEigenData, getMonodromy, getPeriod, propagateState, tryConverging!#, getIndividualPeriodicOrbit, interpOrbit
@@ -146,17 +146,26 @@ function getApproxEigenData(targeter::SpatialPerpJCMSTargeter, solution::MBD.CR3
     propagator = MBD.Propagator(equationType = MBD.STM)
     nStates::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
     nSegs::Int64 = length(solution.segments)
-    STMs::Vector{StaticArrays.SMatrix{6, 6, Float64}} = []
+    renormalizeEvent::DifferentialEquations.DiscreteCallback = DifferentialEquations.PeriodicCallback(MBD.renormalize!, 0.1)
+    STMs::Vector{Matrix{Float64}} = []
     for s::Int64 = 1:nSegs
-        propSegment::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].originNode.state.data, MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel)
+        Rs::Vector{Matrix{Float64}} = []
+        propSegment::MBD.CR3BPArc = propagateWithPeriodicEvent(propagator, renormalizeEvent, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].originNode.state.data, MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel, [targeter.dynamicsModel, Rs])
         endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
-        STM::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(reshape(endState[7:42], (6,6)))
+        STM::Matrix{Float64} = reshape(endState[7:42], (6,6))
+        for R::Matrix{Float64} in reverse(Rs)
+            STM *= R
+        end
         push!(STMs, STM)
     end
     for s::Int64 = nSegs:-1:1
-        propSegment::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].terminalNode.state.data.*[1, -1, 1, -1, 1, -1], MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel)
+        Rs::Vector{Matrix{Float64}} = []
+        propSegment::MBD.CR3BPArc = propagateWithPeriodicEvent(propagator, renormalizeEvent, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].terminalNode.state.data.*[1, -1, 1, -1, 1, -1], MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel, [targeter.dynamicsModel, Rs])
         endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
-        STM::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(reshape(endState[7:42], (6,6)))
+        STM::Matrix{Float64} = reshape(endState[7:42], (6,6))
+        for R::Matrix{Float64} in reverse(Rs)
+            STM *= R
+        end
         push!(STMs, STM)
     end
     rows::Vector{Int64} = []
@@ -228,22 +237,31 @@ function getMonodromy(targeter::SpatialPerpJCMSTargeter, solution::MBD.CR3BPMult
     propagator = MBD.Propagator(equationType = MBD.STM)
     nStates::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
     nSegs::Int64 = length(solution.segments)
-    STMs::Vector{StaticArrays.SMatrix{6, 6, Float64}} = []
+    renormalizeEvent::DifferentialEquations.DiscreteCallback = DifferentialEquations.PeriodicCallback(MBD.renormalize!, 0.1)
+    STMs::Vector{Matrix{Float64}} = []
     for s::Int64 = 1:nSegs
-        propSegment::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].originNode.state.data, MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel)
+        Rs::Vector{Matrix{Float64}} = []
+        propSegment::MBD.CR3BPArc = propagateWithPeriodicEvent(propagator, renormalizeEvent, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].originNode.state.data, MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel, [targeter.dynamicsModel, Rs])
         endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
-        STM::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(reshape(endState[7:42], (6,6)))
+        STM::Matrix{Float64} = reshape(endState[7:42], (6,6))
+        for R::Matrix{Float64} in reverse(Rs)
+            STM *= R
+        end
         push!(STMs, STM)
     end
     for s::Int64 = nSegs:-1:1
-        propSegment::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].terminalNode.state.data.*[1, -1, 1, -1, 1, -1], MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel)
+        Rs::Vector{Matrix{Float64}} = []
+        propSegment::MBD.CR3BPArc = propagateWithPeriodicEvent(propagator, renormalizeEvent, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].terminalNode.state.data.*[1, -1, 1, -1, 1, -1], MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel, [targeter.dynamicsModel, Rs])
         endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
-        STM::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(reshape(endState[7:42], (6,6)))
+        STM::Matrix{Float64} = reshape(endState[7:42], (6,6))
+        for R::Matrix{Float64} in reverse(Rs)
+            STM *= R
+        end
         push!(STMs, STM)
     end
     M::Matrix{Float64} = Matrix(STMs[end])
-    for s::Int64 = (2*nSegs-1):-1:1
-        M *= STMs[s]
+    for Phi::Matrix{Float64} in reverse(STMs[1:end-1])
+        M *= Phi
     end
 
     return M
