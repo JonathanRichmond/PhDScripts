@@ -3,7 +3,7 @@ Script for multiple shooter code development
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 4/21/25
+U: 5/29/25
 """
 module MSDev
 println()
@@ -26,9 +26,9 @@ L5::Vector{Float64} = getEquilibriumPoint(dynamicsModel, 5)
 
 targeter = SpatialPerpJCMSTargeter(dynamicsModel)
 
-initialStateGuess::Vector{Float64} = [0.850522, 0, -0.177117, 0, 0.255761, 0] # [0.881995, 0, -0.24036, 0, 0.144858, 0]
-tSpanGuess::Vector{Float64} = [0, 18.0561] # [0, 20.3756]
-targetJC::Float64 = 3.0098 # 2.9833
+initialStateGuess::Vector{Float64} = [0.881995, 0, -0.24036, 0, 0.144858, 0] # [0.850522, 0, -0.177117, 0, 0.255761, 0]
+tSpanGuess::Vector{Float64} = [0, 20.3756] # [0, 18.0561] 
+targetJC::Float64 = 2.9833 # 3.0098
 numSegs::Int64 = 28
 solution1::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numSegs, targetJC)
 println("Converged Orbit 1:\n\tState:$(solution1.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution1))\n\tJC: $(getJacobiConstant(dynamicsModel, solution1.nodes[1].state.data[1:6]))")
@@ -36,9 +36,9 @@ orbit = MBD.CR3BPPeriodicOrbit(dynamicsModel, solution1.nodes[1].state.data[1:6]
 (lambda::Vector{Complex{Float64}}, V::Matrix{Complex{Float64}}) = getApproxEigenData(targeter, solution1)
 (lambda2::Vector{Complex{Float64}}, V2::Matrix{Complex{Float64}}) = getEigenData(orbit)
 println("\nEigenvalues: $lambda")
-println("\nEigenvector: $(V[:,6])")
-println("\nEigenvalue2: $(lambda2[6])")
-println("\nEigenvector2: $(V2[:,6])")
+# println("\nEigenvector: $(V[:,3])")
+println("\nEigenvalues2: $(lambda2)")
+# println("\nEigenvector2: $(V2[:,2])")
 
 # solution2::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, numSegs, targetJC-1E-5, 1E-10)
 # println("\nConverged Orbit 2:\n\tState:$(solution2.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution2))\n\tJC: $(getJacobiConstant(dynamicsModel, solution2.nodes[1].state.data[1:6]))")

@@ -3,7 +3,7 @@ Script for BCR4BP code development
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 4/21/25
+U: 5/29/25
 """
 module BCR4BPDev
 println()
@@ -14,10 +14,10 @@ include("../BCR4BPTargeters/PlanarPerpP.jl")
 include("../CR3BPTargeters/PlanarPerpJC.jl")
 include("../Utilities/Export.jl")
 
-function homotopy(systemData::MBD.BCR4BPSystemData, targeter::PlanarPerpP12Targeter, initialStateGuess::Vector{Float64}, targetP::Float64, tol::Float64 = 1E-11)
+function homotopy(systemData::MBD.BCR4BPSystemData, targeter::PlanarPerpP12Targeter, initialStateGuess::Vector{Float64}, targetP::Float64, revs::Int64, tol::Float64 = 1E-11)
     SunGravParam::Float64 = copy(systemData.primaryData[3].gravParam)
     systemData.primaryData[3].gravParam = 0.0
-    solution::MBD.BCR4BP12MultipleShooterProblem = correct(targeter, initialStateGuess, targetP, tol)
+    solution::MBD.BCR4BP12MultipleShooterProblem = correct(targeter, initialStateGuess, targetP, revs, tol = tol)
     println("\nConverged CR3BP L1 Orbit:\n\tState:$(solution.nodes[1].state.data[1:7])\n\tPeriod: $(getPeriod(targeter, solution))")
     
     epsilon = 0.0
@@ -25,7 +25,7 @@ function homotopy(systemData::MBD.BCR4BPSystemData, targeter::PlanarPerpP12Targe
         epsilon += 0.001
         systemData.primaryData[3].gravParam = epsilon*SunGravParam
         initialStateGuess = solution.nodes[1].state.data[1:7]
-        solution = correct(targeter, initialStateGuess, targetP, tol)
+        solution = correct(targeter, initialStateGuess, targetP, revs, tol = tol, JTol = 0.08)
         # println("\nConverged Homotopy Orbit:\n\tState:$(solution.nodes[1].state.data[1:7])")
     end
 
@@ -284,9 +284,11 @@ println("\nEigenvalues: $(E.values)")
 
 initialStateGuess::Vector{Float64} = append!(getEquilibriumPoint(CR3BPDynamicsModel, 1), [0.0, 0.0, 0.0, 0.0])
 targetP::Float64 = getSynodicPeriod(EMDynamicsModel)
-solution::MBD.BCR4BP12MultipleShooterProblem = homotopy(systemData, targeter, initialStateGuess, targetP, 1E-8)
-refinedSolution::MBD.BCR4BP12MultipleShooterProblem = correct(targeter, solution.nodes[1].state.data[1:7], targetP, 1E-10)
+solution::MBD.BCR4BP12MultipleShooterProblem = homotopy(systemData, targeter, initialStateGuess, targetP, 1, 1E-8)
+refinedSolution::MBD.BCR4BP12MultipleShooterProblem = correct(targeter, solution.nodes[1].state.data[1:7], targetP, 1, tol = 1E-11)
 println("\nConverged BCR4BP L1 Orbit:\n\tState:$(refinedSolution.nodes[1].state.data[1:7])\n\tPeriod: $(getPeriod(targeter, refinedSolution))")
+M::Matrix{Float64} = getMonodromy(targeter, refinedSolution)
+println("\nEigenvalues: $(LinearAlgebra.eigen(M).values)")
 arcL1::MBD.BCR4BP12Arc = propagate(propagator, refinedSolution.nodes[1].state.data[1:7], tEM, EMDynamicsModel)
 nStatesL1::Int64 = getStateCount(arcL1)
 xL1::Vector{Float64} = Vector{Float64}(undef, nStatesL1)
