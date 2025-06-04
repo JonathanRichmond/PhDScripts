@@ -3,7 +3,7 @@ Script for Earth-Moon CR3BP L1 Lyapunov orbit family
 
 Author: Jonathan Richmond
 C: 2/4/25
-U: 6/3/25
+U: 6/4/25
 """
 module EML1Lyap
 println()
@@ -26,24 +26,22 @@ targeter = PlanarPerpJCTargeter(dynamicsModel)
 (initialStateGuess::Vector{Float64}, tSpanGuess::Vector{Float64}) = getLinearVariation(dynamicsModel, 1, LagrangePoints[1], [0.005, 0, 0])
 targetJC::Float64 = getJacobiConstant(dynamicsModel, initialStateGuess)
 solution1::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, targetJC)
-println("Converged Orbit 1:\n\tState:$(solution1.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution1))\n\tJC: $(getJacobiConstant(dynamicsModel, solution1.nodes[1].state.data[1:6]))")
+println("Converged Orbit 1:\n\tState:$(solution1.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution1))\n\tJC: $(getJacobiConstant(dynamicsModel, solution1.nodes[1].state.data[1:6]))\n")
 
 solution2::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, targetJC-1E-4)
-println("\nConverged Orbit 2:\n\tState:$(solution2.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution2))\n\tJC: $(getJacobiConstant(dynamicsModel, solution2.nodes[1].state.data[1:6]))")
+println("Converged Orbit 2:\n\tState:$(solution2.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution2))\n\tJC: $(getJacobiConstant(dynamicsModel, solution2.nodes[1].state.data[1:6]))\n")
 
+println("Continuing orbits...")
 engine = MBD.JacobiConstantContinuationEngine(solution1, solution2, -1E-4, -1E-2)
 ydot0JumpCheck = MBD.BoundingBoxJumpCheck("Initial State", [NaN NaN; -2.5 0])
 addJumpCheck!(engine, ydot0JumpCheck)
 MoonEndCheck = MBD.BoundingBoxContinuationEndCheck("Initial State", [LagrangePoints[1][1] getPrimaryState(dynamicsModel, 2)[1]-Moon.bodyRadius/getCharLength(systemData); NaN NaN])
 addEndCheck!(engine, MoonEndCheck)
-
-println()
 family = MBD.CR3BPOrbitFamily(dynamicsModel)
 solutions::MBD.CR3BPContinuationFamily = doContinuation!(engine, solution1, solution2)
 lastOrbit::MBD.CR3BPPeriodicOrbit = getIndividualPeriodicOrbit(targeter, solutions, getNumMembers(solutions))
-println("\nLast Converged Orbit:\n\tState:$(lastOrbit.initialCondition)\n\tPeriod: $(lastOrbit.period)\n\tJC: $(getJacobiConstant(lastOrbit))")
+println("Last Converged Orbit:\n\tState:$(lastOrbit.initialCondition)\n\tPeriod: $(lastOrbit.period)\n\tJC: $(getJacobiConstant(lastOrbit))\n")
 
-println()
 for s::Int64 in 1:getNumMembers(solutions)
     orbit::MBD.CR3BPPeriodicOrbit = getIndividualPeriodicOrbit(targeter, solutions, s)
     push!(family.initialConditions, orbit.initialCondition)
