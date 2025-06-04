@@ -3,7 +3,7 @@ Jacobi constant perpendicular crossing multiple shooter for CR3BP spatial orbits
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 5/29/25
+U: 6/4/25
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, SparseArrays, StaticArrays, Statistics
@@ -30,31 +30,22 @@ struct SpatialPerpJCMSTargeter <: MBD.AbstractTargeter
 end
 
 """
-    correct(targeter, q0, tSpan, numSegs, targetJC; tol)
+    correct(targeter, qVector, tVector, numSegs, targetJC; tol)
 
 Return corrected CR3BP multiple shooter problem object
 
 # Arguments
 - `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
-- `q0::Vector{Float64}`: Initial state guess [ndim]
-- `tSpan::Vector{Float64}`: Time span guess [ndim]
+- `qVector::Vector{Vector{Float64}}`: Node state guesses [ndim]
+- `tVector::Vector{Float64}`: Node time guesses [ndim]
 - `numSegs::Int64`: Number of segments
 - `targetJC::Float64`: Target Jacobi constant
 - `tol::Float64`: Convergence tolerance (default = 1E-11)
 """
-function correct(targeter::SpatialPerpJCMSTargeter, q0::Vector{Float64}, tSpan::Vector{Float64}, numSegs::Int64, targetJC::Float64, tol::Float64 = 1E-11)
-    halfPeriodGuess::Float64 = (tSpan[2]-tSpan[1])/2
-    tPCGuess::Float64 = tSpan[1]+halfPeriodGuess
-    propagator = MBD.Propagator()
-    arc::MBD.CR3BPArc = propagate(propagator, q0, [tSpan[1], tPCGuess], targeter.dynamicsModel)
-    numStates::Int64 = getStateCount(arc)
-    numNodes::Int64 = numSegs/2+1
-    indices::Vector{Int64} = round.(Int64, range(1, numStates, numNodes))
-    stateGuesses::Vector{Vector{Float64}} = [getStateByIndex(arc, indices[i]) for i = eachindex(indices)]
-    timeGuesses::Vector{Float64} = [getTimeByIndex(arc, indices[i]) for i = eachindex(indices)]
+function correct(targeter::SpatialPerpJCMSTargeter, qVector::Vector{Vector{Float64}}, tVector::Vector{Float64}, numSegs::Int64, targetJC::Float64, tol::Float64 = 1E-11)
     nodes::Vector{MBD.CR3BPNode} = []
     for n = 1:numNodes
-        node = MBD.CR3BPNode(timeGuesses[n], stateGuesses[n], dynamicsModel)
+        node = MBD.CR3BPNode(tVector[n], qVector[n], dynamicsModel)
         node.state.name = "Node "*string(n)*" State"
         node.epoch.name = "Node "*string(n)*" Epoch"
         push!(nodes, node)
@@ -67,7 +58,6 @@ function correct(targeter::SpatialPerpJCMSTargeter, q0::Vector{Float64}, tSpan::
         segment.TOF.name = "Segment "*string(s)*" TOF"
         push!(segments, segment)
     end
-    map(s -> setFreeVariableMask!(s.TOF, [false]), segments[1:end-1])
     map(s -> addSegment!(problem, s), segments)
     map(s -> addConstraint!(problem, MBD.CR3BPContinuityConstraint(s)), segments)
     addConstraint!(problem, MBD.CR3BPStateConstraint(nodes[end], [2, 4, 6], [0.0, 0.0, 0.0]))
@@ -77,6 +67,7 @@ function correct(targeter::SpatialPerpJCMSTargeter, q0::Vector{Float64}, tSpan::
     # shooter.printProgress = true
     shooter.maxIterations = 50
     solution::MBD.CR3BPMultipleShooterProblem = MBD.solve!(shooter, problem)
+    map(s -> updateTerminalNodeEpoch!(s), solution.segments)
 
     return solution
 end
@@ -365,7 +356,6 @@ function tryConverging!(targeter::SpatialPerpJCMSTargeter, multipleShooterContin
         end
     catch err
         multipleShooterContinuationEngine.dataInProgress.converging = false
-        println("\tFailed to converge")
-        # @error exception = (err, catch_backtrace())
+        multipleShooterContinuationEngine.printProgress && println("\tFailed to converge")
     end
 end
