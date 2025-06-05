@@ -51,7 +51,7 @@ guessOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, "FamilyData/CR3B
 compOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, "FamilyData/CR3BPEML1Lyapunovs.csv", "Period", targetP)
 initialStateGuess::Vector{Float64} = push!(guessOrbit.initialCondition, 0.0)
 solution::MBD.BCR4BP12MultipleShooterProblem = homotopy(systemData, targeter, initialStateGuess, 1)
-refinedSolution::MBD.BCR4BP12MultipleShooterProblem = correct(targeter, solution.nodes[1].state.data[1:7], targetP, 1; tol = 1E-11)
+refinedSolution::MBD.BCR4BP12MultipleShooterProblem = correct(targeter, solution.nodes[1].state.data[1:7], targetP, 1)
 println("Converged BCR4BP Orbit:\n\tState:$(refinedSolution.nodes[1].state.data[1:7])\n\tPeriod: $(getPeriod(targeter, refinedSolution))\n")
 M::Matrix{Float64} = getMonodromy(targeter, refinedSolution)
 E::LinearAlgebra.Eigen = LinearAlgebra.eigen(M)
@@ -61,7 +61,8 @@ guessOrbit2::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, "FamilyData/CR3
 compOrbit2::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, "FamilyData/CR3BPEML1Lyapunovs.csv", "Period", targetP/2)
 initialStateGuess2::Vector{Float64} = push!(guessOrbit2.initialCondition, 0.0)
 solution2::MBD.BCR4BP12MultipleShooterProblem = homotopy(systemData, targeter, initialStateGuess2, 1)
-refinedSolution2::MBD.BCR4BP12MultipleShooterProblem = correct(targeter, solution2.nodes[1].state.data[1:7], targetP, 1; tol = 1E-11)
+refinedSolution2::MBD.BCR4BP12MultipleShooterProblem = correct(targeter, solution2.nodes[1].state.data[1:7], targetP, 1)
+println("Converged BCR4BP Orbit:\n\tState:$(refinedSolution2.nodes[1].state.data[1:7])\n\tPeriod: $(getPeriod(targeter, refinedSolution2))\n")
 
 arc::MBD.BCR4BP12Arc = propagate(propagator, refinedSolution.nodes[1].state.data[1:7], collect(range(0, targetP, 1001)), dynamicsModel)
 nStates::Int64 = getStateCount(arc)
