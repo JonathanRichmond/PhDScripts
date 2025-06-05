@@ -3,7 +3,7 @@ Period perpendicular crossing targeter for BCR4BP planar orbits
 
 Author: Jonathan Richmond
 C: 4/9/25
-U: 5/29/25
+U: 6/5/25
 """
 
 using MBD, DifferentialEquations, StaticArrays
@@ -30,7 +30,7 @@ struct PlanarPerpP12Targeter <: MBD.AbstractTargeter
 end
 
 """
-    correct(targeter, q0, targetP, revs; tol, JTol)
+    correct(targeter, q0, targetP, synRevs; tol, JTol)
 
 Return corrected BCR4BP P1-P2 multiple shooter problem object
 
@@ -38,11 +38,11 @@ Return corrected BCR4BP P1-P2 multiple shooter problem object
 - `targeter::PlanarPerpP12Targeter`: BCR4BP P1-P2 planar perpendicular crossing period targeter object
 - `q0::Vector{Float64}`: Initial state guess [ndim]
 - `targetP::Float64`: Target period [ndim]
-- `revs::Int64`: Number of synodic revolutions
+- `synRevs::Int64`: Number of synodic revolutions
 - `tol::Float64`: Convergence tolerance (default = 1E-11)
 - `JTol::Float64`: Jacobian accuracy tolerance (default = 2E-3)
 """
-function correct(targeter::PlanarPerpP12Targeter, q0::Vector{Float64}, targetP::Float64, revs::Int64; tol::Float64 = 1E-11, JTol::Float64 = 2E-3)
+function correct(targeter::PlanarPerpP12Targeter, q0::Vector{Float64}, targetP::Float64, synRevs::Int64; tol::Float64 = 1E-11, JTol::Float64 = 2E-3)
     halfPeriod::Float64 = targetP/2
     qPCGuess::Vector{Float64} = propagateState(targeter, q0, [0, halfPeriod])
     originNode = MBD.BCR4BP12Node(0.0, q0, targeter.dynamicsModel)
@@ -54,7 +54,7 @@ function correct(targeter::PlanarPerpP12Targeter, q0::Vector{Float64}, targetP::
     problem = MBD.BCR4BP12MultipleShooterProblem()
     addSegment!(problem, segment)
     addConstraint!(problem, MBD.BCR4BP12ContinuityConstraint(segment))
-    addConstraint!(problem, MBD.BCR4BP12StateConstraint(terminalNode, [2, 4, 7], [0, 0, q0[7]-revs*pi]))
+    addConstraint!(problem, MBD.BCR4BP12StateConstraint(terminalNode, [2, 4, 7], [0, 0, q0[7]-synRevs*pi]))
     checkJacobian(problem; relTol = JTol)
     shooter = MBD.BCR4BP12MultipleShooter(tol)
     # shooter.printProgress = true
