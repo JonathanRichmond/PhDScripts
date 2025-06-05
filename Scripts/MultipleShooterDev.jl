@@ -3,7 +3,7 @@ Script for multiple shooter code development
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 6/4/25
+U: 6/5/25
 """
 module MSDev
 println()
@@ -23,10 +23,10 @@ LagrangePoints::Vector{Vector{Float64}} = [getEquilibriumPoint(dynamicsModel, l)
 propagator = MBD.Propagator()
 targeter = SpatialPerpJCMSTargeter(dynamicsModel)
 
-initialStateGuess::Vector{Float64} = [0.881995, 0, -0.24036, 0, 0.144858, 0]
-periodGuess::Float64 = 20.3756
-targetJC::Float64 = 2.9833
-numSegs::Int64 = 28
+initialStateGuess::Vector{Float64} = [0.67, 0.0, 0.0, 0.0, 0.62, 0.0] # [0.881995, 0, -0.24036, 0, 0.144858, 0]
+periodGuess::Float64 = 11.3 # 20.3756
+targetJC::Float64 = 3.0476175370795078 # 2.9833
+numSegs::Int64 = 6 # 28
 
 tPCGuess::Float64 = periodGuess/2
 guessArc::MBD.CR3BPArc = propagate(propagator, initialStateGuess, [0, tPCGuess], dynamicsModel)
@@ -46,8 +46,8 @@ println("Converged Orbit 1:\n\tState:$(solution1.nodes[1].state.data[1:6])\n\tPe
 # println("\nEigenvalues2: $(lambda2)")
 # println("\nEigenvector2: $(V2[:,2])")
 
-solution2::MBD.CR3BPMultipleShooterProblem = correct(targeter, stateGuesses, timeGuesses, numSegs, targetJC-1E-5)
-println("Converged Orbit 2:\n\tState:$(solution2.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution2))\n\tJC: $(getJacobiConstant(dynamicsModel, solution2.nodes[1].state.data[1:6]))\n")
+# solution2::MBD.CR3BPMultipleShooterProblem = correct(targeter, stateGuesses, timeGuesses, numSegs, targetJC-1E-5)
+# println("Converged Orbit 2:\n\tState:$(solution2.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution2))\n\tJC: $(getJacobiConstant(dynamicsModel, solution2.nodes[1].state.data[1:6]))\n")
 
 # engine = MBD.CR3BPMultipleShooterContinuationEngine(solution1, solution2, "Jacobi Constant", 1, -1E-5, -1E-2)
 # q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.85 0.91; -0.5 -0.17; 0.08 0.26])
@@ -57,67 +57,67 @@ println("Converged Orbit 2:\n\tState:$(solution2.nodes[1].state.data[1:6])\n\tPe
 # solutions::MBD.CR3BPContinuationFamily = doContinuation!(targeter, engine, solution1, solution2, numSegs)
 # println("Last Converged Orbit:\n\tState:$(solutions.nodes[end][1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solutions.segments[end]))\n\tJC: $(getJacobiConstant(dynamicsModel, solutions.nodes[end][1].state.data[1:6]))\n")
 
-# mf = MATLAB.MatFile("Output/CR3BPTraj.mat", "w")
-# for s::Int64 = 1:numSegs/2
-#     elapsedT::Float64 = 0.0
-#     if s > 1
-#         for j::Int64 = 2:s
-#             elapsedT += solution1.segments[s-1].TOF.data[1]
-#         end
-#     end
-#     arc::MBD.CR3BPArc = propagate(propagator, solution1.nodes[s].state.data[1:6], [elapsedT, elapsedT+solution1.segments[s].TOF.data[1]], dynamicsModel)
-#     nStates::Int64 = getStateCount(arc)
-#     x::Vector{Float64} = zeros(Float64, nStates)
-#     y::Vector{Float64} = zeros(Float64, nStates)
-#     z::Vector{Float64} = zeros(Float64, nStates)
-#     xdot::Vector{Float64} = zeros(Float64, nStates)
-#     ydot::Vector{Float64} = zeros(Float64, nStates)
-#     zdot::Vector{Float64} = zeros(Float64, nStates)
-#     t::Vector{Float64} = zeros(Float64, nStates)
-#     for j::Int64 in 1:nStates
-#         state::Vector{Float64} = getStateByIndex(arc, j)
-#         x[j] = state[1]
-#         y[j] = state[2]
-#         z[j] = state[3]
-#         xdot[j] = state[4]
-#         ydot[j] = state[5]
-#         zdot[j] = state[6]
-#         t[j] = getTimeByIndex(arc, j)
-#     end
-#     exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, getJacobiConstant(dynamicsModel, solution1.nodes[s].state.data[1:6]), mf, Symbol("trajCR3BP"*string(s)))
-# end
-# for s::Int64 = 1:numSegs/2
-#     elapsedT::Float64 = 0.0
-#     for j = 1:length(solution1.segments)
-#         elapsedT += solution1.segments[j].TOF.data[1]
-#     end
-#     if s > 1
-#         for j::Int64 = 2:s
-#             elapsedT += solution1.segments[end+2-s].TOF.data[1]
-#         end
-#     end
-#     arc::MBD.CR3BPArc = propagate(propagator, solution1.nodes[end-s].state.data[1:6].*[1, -1, 1, -1, 1, -1], [elapsedT+solution1.segments[end+1-s].TOF.data[1], elapsedT], dynamicsModel)
-#     nStates::Int64 = getStateCount(arc)
-#     x::Vector{Float64} = zeros(Float64, nStates)
-#     y::Vector{Float64} = zeros(Float64, nStates)
-#     z::Vector{Float64} = zeros(Float64, nStates)
-#     xdot::Vector{Float64} = zeros(Float64, nStates)
-#     ydot::Vector{Float64} = zeros(Float64, nStates)
-#     zdot::Vector{Float64} = zeros(Float64, nStates)
-#     t::Vector{Float64} = zeros(Float64, nStates)
-#     for j::Int64 in 1:nStates
-#         state::Vector{Float64} = getStateByIndex(arc, j)
-#         x[j] = state[1]
-#         y[j] = state[2]
-#         z[j] = state[3]
-#         xdot[j] = state[4]
-#         ydot[j] = state[5]
-#         zdot[j] = state[6]
-#         t[j] = getTimeByIndex(arc, j)
-#     end
-#     exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, getJacobiConstant(dynamicsModel, solution1.nodes[end-s].state.data[1:6]), mf, Symbol("trajCR3BP"*string(s+numSegs)))
-# end
-# MATLAB.close(mf)
+mf = MATLAB.MatFile("Output/CR3BPTraj.mat", "w")
+for s::Int64 = 1:numSegs/2
+    elapsedT::Float64 = 0.0
+    if s > 1
+        for j::Int64 = 2:s
+            elapsedT += solution1.segments[s-1].TOF.data[1]
+        end
+    end
+    arc::MBD.CR3BPArc = propagate(propagator, solution1.nodes[s].state.data[1:6], [elapsedT, elapsedT+solution1.segments[s].TOF.data[1]], dynamicsModel)
+    nStates::Int64 = getStateCount(arc)
+    x::Vector{Float64} = zeros(Float64, nStates)
+    y::Vector{Float64} = zeros(Float64, nStates)
+    z::Vector{Float64} = zeros(Float64, nStates)
+    xdot::Vector{Float64} = zeros(Float64, nStates)
+    ydot::Vector{Float64} = zeros(Float64, nStates)
+    zdot::Vector{Float64} = zeros(Float64, nStates)
+    t::Vector{Float64} = zeros(Float64, nStates)
+    for j::Int64 in 1:nStates
+        state::Vector{Float64} = getStateByIndex(arc, j)
+        x[j] = state[1]
+        y[j] = state[2]
+        z[j] = state[3]
+        xdot[j] = state[4]
+        ydot[j] = state[5]
+        zdot[j] = state[6]
+        t[j] = getTimeByIndex(arc, j)
+    end
+    exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, getJacobiConstant(dynamicsModel, solution1.nodes[s].state.data[1:6]), mf, Symbol("trajCR3BP"*string(s)))
+end
+for s::Int64 = 1:numSegs/2
+    elapsedT::Float64 = 0.0
+    for j = 1:length(solution1.segments)
+        elapsedT += solution1.segments[j].TOF.data[1]
+    end
+    if s > 1
+        for j::Int64 = 2:s
+            elapsedT += solution1.segments[end+2-s].TOF.data[1]
+        end
+    end
+    arc::MBD.CR3BPArc = propagate(propagator, solution1.nodes[end-s].state.data[1:6].*[1, -1, 1, -1, 1, -1], [elapsedT+solution1.segments[end+1-s].TOF.data[1], elapsedT], dynamicsModel)
+    nStates::Int64 = getStateCount(arc)
+    x::Vector{Float64} = zeros(Float64, nStates)
+    y::Vector{Float64} = zeros(Float64, nStates)
+    z::Vector{Float64} = zeros(Float64, nStates)
+    xdot::Vector{Float64} = zeros(Float64, nStates)
+    ydot::Vector{Float64} = zeros(Float64, nStates)
+    zdot::Vector{Float64} = zeros(Float64, nStates)
+    t::Vector{Float64} = zeros(Float64, nStates)
+    for j::Int64 in 1:nStates
+        state::Vector{Float64} = getStateByIndex(arc, j)
+        x[j] = state[1]
+        y[j] = state[2]
+        z[j] = state[3]
+        xdot[j] = state[4]
+        ydot[j] = state[5]
+        zdot[j] = state[6]
+        t[j] = getTimeByIndex(arc, j)
+    end
+    exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, getJacobiConstant(dynamicsModel, solution1.nodes[end-s].state.data[1:6]), mf, Symbol("trajCR3BP"*string(s+numSegs)))
+end
+MATLAB.close(mf)
 
 # exportSolution::Int64 = length(solutions.nodes)
 # mf = MATLAB.MatFile("Output/CR3BPTraj.mat", "w")
