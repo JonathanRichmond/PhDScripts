@@ -8,7 +8,9 @@ U: 6/6/25
 module EML1Lyap
 println()
 
-using MBD, GLMakie
+using MBD, GLMakie, Logging
+
+global_logger(ConsoleLogger(stderr, Logging.Debug)) #Info, Warn, Error
 
 include("../CR3BPTargeters/PlanarPerpJC.jl")
 include("../Utilities/Export.jl")
@@ -33,10 +35,13 @@ println("Converged Orbit 2:\n\tIC:\t$(solution2.nodes[1].state.data[1:6])\n\tP:\
 
 println("Continuing orbits...")
 continuationEngine = MBD.JacobiConstantContinuationEngine(solution1, solution2, -1E-4, -1E-2)
+continuationEngine.printProgress = true
 ydot0JumpCheck = MBD.BoundingBoxJumpCheck("Initial State", [NaN NaN; -2.5 0])
 addJumpCheck!(continuationEngine, ydot0JumpCheck)
 MoonEndCheck = MBD.BoundingBoxContinuationEndCheck("Initial State", [LagrangePoints[1][1] getPrimaryState(dynamicsModel, 2)[1]-Moon.bodyRadius/getCharLength(systemData); NaN NaN])
 addEndCheck!(continuationEngine, MoonEndCheck)
+numStepsEndCheck = MBD.NumberStepsContinuationEndCheck(5)
+addEndCheck!(continuationEngine, numStepsEndCheck)
 family = MBD.CR3BPOrbitFamily(dynamicsModel)
 solutions::MBD.CR3BPContinuationFamily = doContinuation!(continuationEngine, solution1, solution2)
 lastOrbit::MBD.CR3BPPeriodicOrbit = getIndividualPeriodicOrbit(targeter, solutions, getNumMembers(solutions))
@@ -50,29 +55,29 @@ for s::Int64 in 1:getNumMembers(solutions)
 end
 eigenSort!(family)
 
-println("\nExporting family data...")
-fullExportCR3BPFamily(family, "FamilyData/CR3BPEML1Lyapunovs.mat", "FamilyData/CR3BPEML1Lyapunovs.csv")
+# println("\nExporting family data...")
+# fullExportCR3BPFamily(family, "FamilyData/CR3BPEML1Lyapunovs.mat", "FamilyData/CR3BPEML1Lyapunovs.csv")
 
-println("\nTesting interpolation...")
-testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEML1Lyapunovs.csv", "JC", 3.0)
-println("Test Orbit:\n\tIC:\t$(testOrbit.initialCondition)\n\tP:\t$(testOrbit.period)\n\tJC:\t$(getJacobiConstant(testOrbit))\n")
+# println("\nTesting interpolation...")
+# testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEML1Lyapunovs.csv", "JC", 3.0)
+# println("Test Orbit:\n\tIC:\t$(testOrbit.initialCondition)\n\tP:\t$(testOrbit.period)\n\tJC:\t$(getJacobiConstant(testOrbit))\n")
 
-println("Plotting orbit...")
-plotOrbit::Int64 = getNumMembers(family)
-orbitArc::MBD.CR3BPArc = propagate(propagator, family.initialConditions[plotOrbit], [0, family.periods[plotOrbit]], dynamicsModel)
-xData::Vector{Float64} = Vector{Float64}(undef, getStateCount(orbitArc))
-yData::Vector{Float64} = Vector{Float64}(undef, getStateCount(orbitArc))
-for s::Int64 in 1:getStateCount(orbitArc)
-    xData[s] = orbitArc.states[s][1]
-    yData[s] = orbitArc.states[s][2]
-end
-(figure, axis) = set2DPlotParameters(L"Earth-Moon $L_{1}$ Lyapunov ($JC=%$(round(getJacobiConstant(dynamicsModel, family.initialConditions[plotOrbit]); digits = 4))$)", L"$x$ [ndim]", L"$y$ [ndim]")
-GLMakie.lines!(axis, xData, yData, color = :white, label = L"$L_{1}$ Lyapunov Orbit")
-GLMakie.scatter!(axis, LagrangePoints[1][1], LagrangePoints[1][2], color = :red, markersize = 5, label = L"$L_{1}$" => (; markersize = 20))
-GLMakie.scatter!(axis, LagrangePoints[2][1], LagrangePoints[2][2], color = :orange, markersize = 5, label = L"$L_{2}$" => (; markersize = 20))
-GLMakie.scatter!(axis, getPrimaryState(dynamicsModel, 1)[1], getPrimaryState(dynamicsModel, 1)[2], color = :blue, markerspace = :data, markersize = Earth.bodyRadius/getCharLength(systemData), label = L"\mathrm{Earth}" => (; markersize = 20))
-GLMakie.scatter!(axis, getPrimaryState(dynamicsModel, 2)[1], getPrimaryState(dynamicsModel, 2)[2], color = :gray, markerspace = :data, markersize = Moon.bodyRadius/getCharLength(systemData), label = L"\mathrm{Moon}" => (; markersize = 20))
-GLMakie.Legend(figure[1,2], axis)
+# println("Plotting orbit...")
+# plotOrbit::Int64 = getNumMembers(family)
+# orbitArc::MBD.CR3BPArc = propagate(propagator, family.initialConditions[plotOrbit], [0, family.periods[plotOrbit]], dynamicsModel)
+# xData::Vector{Float64} = Vector{Float64}(undef, getStateCount(orbitArc))
+# yData::Vector{Float64} = Vector{Float64}(undef, getStateCount(orbitArc))
+# for s::Int64 in 1:getStateCount(orbitArc)
+#     xData[s] = orbitArc.states[s][1]
+#     yData[s] = orbitArc.states[s][2]
+# end
+# (figure, axis) = set2DPlotParameters(L"Earth-Moon $L_{1}$ Lyapunov ($JC=%$(round(getJacobiConstant(dynamicsModel, family.initialConditions[plotOrbit]); digits = 4))$)", L"$x$ [ndim]", L"$y$ [ndim]")
+# GLMakie.lines!(axis, xData, yData, color = :white, label = L"$L_{1}$ Lyapunov Orbit")
+# GLMakie.scatter!(axis, LagrangePoints[1][1], LagrangePoints[1][2], color = :red, markersize = 5, label = L"$L_{1}$" => (; markersize = 20))
+# GLMakie.scatter!(axis, LagrangePoints[2][1], LagrangePoints[2][2], color = :orange, markersize = 5, label = L"$L_{2}$" => (; markersize = 20))
+# GLMakie.scatter!(axis, getPrimaryState(dynamicsModel, 1)[1], getPrimaryState(dynamicsModel, 1)[2], color = :blue, markerspace = :data, markersize = Earth.bodyRadius/getCharLength(systemData), label = L"\mathrm{Earth}" => (; markersize = 20))
+# GLMakie.scatter!(axis, getPrimaryState(dynamicsModel, 2)[1], getPrimaryState(dynamicsModel, 2)[2], color = :gray, markerspace = :data, markersize = Moon.bodyRadius/getCharLength(systemData), label = L"\mathrm{Moon}" => (; markersize = 20))
+# GLMakie.Legend(figure[1,2], axis)
 
 println()
 end
