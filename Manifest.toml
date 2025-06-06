@@ -2,7 +2,7 @@
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "3781460c0cbc8aa053b286074b93f06d88083874"
+project_hash = "1a3b4bd8a2ace5049382426090def3c359b05776"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "e2478490447631aedba0823d4d7a80b2cc8cdb32"
@@ -1439,8 +1439,8 @@ uuid = "10e44e05-a98a-55b3-a45b-ba969058deb6"
 version = "0.9.0"
 
 [[deps.MBD]]
-deps = ["CSV", "Combinatorics", "DataFrames", "DifferentialEquations", "LightXML", "LinearAlgebra", "SPICE", "StaticArrays", "UpdateJulia"]
-git-tree-sha1 = "730349e77c790aa8d22bf0181cea834d6322cec1"
+deps = ["CSV", "Combinatorics", "DataFrames", "DifferentialEquations", "LightXML", "LinearAlgebra", "Logging", "SPICE", "StaticArrays", "UpdateJulia"]
+git-tree-sha1 = "9280042a745af2588d4476e57e9d2efa8f75c3e8"
 repo-rev = "richmo11-memoryChanges"
 repo-url = "https://github.com/JonathanRichmond/MBD.jl.git"
 uuid = "994ce0ec-d6e5-428b-b4b3-7b10f5a0848a"
