@@ -3,7 +3,7 @@ Script for Earth-Moon CR3BP L1 Lyapunov orbit family
 
 Author: Jonathan Richmond
 C: 2/4/25
-U: 6/5/25
+U: 6/6/25
 """
 module EML1Lyap
 println()
@@ -32,13 +32,13 @@ solution2::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess
 println("Converged Orbit 2:\n\tIC:\t$(solution2.nodes[1].state.data[1:6])\n\tP:\t$(getPeriod(targeter, solution2))\n\tJC:\t$(getJacobiConstant(dynamicsModel, solution2.nodes[1].state.data[1:6]))\n")
 
 println("Continuing orbits...")
-engine = MBD.JacobiConstantContinuationEngine(solution1, solution2, -1E-4, -1E-2)
+continuationEngine = MBD.JacobiConstantContinuationEngine(solution1, solution2, -1E-4, -1E-2)
 ydot0JumpCheck = MBD.BoundingBoxJumpCheck("Initial State", [NaN NaN; -2.5 0])
-addJumpCheck!(engine, ydot0JumpCheck)
+addJumpCheck!(continuationEngine, ydot0JumpCheck)
 MoonEndCheck = MBD.BoundingBoxContinuationEndCheck("Initial State", [LagrangePoints[1][1] getPrimaryState(dynamicsModel, 2)[1]-Moon.bodyRadius/getCharLength(systemData); NaN NaN])
-addEndCheck!(engine, MoonEndCheck)
+addEndCheck!(continuationEngine, MoonEndCheck)
 family = MBD.CR3BPOrbitFamily(dynamicsModel)
-solutions::MBD.CR3BPContinuationFamily = doContinuation!(engine, solution1, solution2)
+solutions::MBD.CR3BPContinuationFamily = doContinuation!(continuationEngine, solution1, solution2)
 lastOrbit::MBD.CR3BPPeriodicOrbit = getIndividualPeriodicOrbit(targeter, solutions, getNumMembers(solutions))
 println("Last Converged Orbit:\n\tIC:\t$(lastOrbit.initialCondition)\n\tP:\t$(lastOrbit.period)\n\tJC:\t$(getJacobiConstant(lastOrbit))\n")
 
@@ -53,14 +53,11 @@ eigenSort!(family)
 println("\nExporting family data...")
 fullExportCR3BPFamily(family, "FamilyData/CR3BPEML1Lyapunovs.mat", "FamilyData/CR3BPEML1Lyapunovs.csv")
 
+println("\nTesting interpolation...")
+testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEML1Lyapunovs.csv", "JC", 3.0)
+println("Test Orbit:\n\tIC:\t$(testOrbit.initialCondition)\n\tP:\t$(testOrbit.period)\n\tJC:\t$(getJacobiConstant(testOrbit))\n")
 
-# TO DO
-# println("\nTesting interpolation...")
-# testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/EML1Lyapunovs.csv", "JC", 3.0)
-# println("\nTest Orbit:\n\tState:$(testOrbit.initialCondition)\n\tPeriod: $(testOrbit.period)\n\tJC: $(getJacobiConstant(testOrbit))\n\tStability Index: $(getStabilityIndex(testOrbit))")
-
-
-println("\nPlotting orbit...")
+println("Plotting orbit...")
 plotOrbit::Int64 = getNumMembers(family)
 orbitArc::MBD.CR3BPArc = propagate(propagator, family.initialConditions[plotOrbit], [0, family.periods[plotOrbit]], dynamicsModel)
 xData::Vector{Float64} = Vector{Float64}(undef, getStateCount(orbitArc))
