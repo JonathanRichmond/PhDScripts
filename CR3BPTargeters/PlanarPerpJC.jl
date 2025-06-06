@@ -3,7 +3,7 @@ Jacobi constant perpendicular crossing targeter for CR3BP planar orbits
 
 Author: Jonathan Richmond
 C: 2/4/25
-U: 6/5/25
+U: 6/6/25
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, StaticArrays
@@ -19,7 +19,7 @@ CR3BP planar perpendicular crossing Jacobi constant targeter object
 # Arguments
 - `dynamicsModel::CR3BPDynamicsModel`: CR3BP dynamics model object
 """
-struct PlanarPerpJCTargeter <: MBD.AbstractTargeter
+struct PlanarPerpJCTargeter
     dynamicsModel::MBD.CR3BPDynamicsModel                               # CR3BP dynamics model object
 
     function PlanarPerpJCTargeter(dynamicsModel::MBD.CR3BPDynamicsModel)
