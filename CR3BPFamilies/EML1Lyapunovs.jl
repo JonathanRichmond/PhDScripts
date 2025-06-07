@@ -10,7 +10,7 @@ println()
 
 using MBD, GLMakie, Logging
 
-global_logger(ConsoleLogger(stderr, Logging.Debug)) #Info, Warn, Error
+global_logger(ConsoleLogger(stderr, Logging.Debug)) # Debug, Info, Warn, Error
 
 include("../CR3BPTargeters/PlanarPerpJC.jl")
 include("../Utilities/Export.jl")
