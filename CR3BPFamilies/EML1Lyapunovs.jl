@@ -3,7 +3,7 @@ Script for Earth-Moon CR3BP L1 Lyapunov orbit family
 
 Author: Jonathan Richmond
 C: 2/4/25
-U: 6/6/25
+U: 6/9/25
 """
 module EML1Lyap
 println()
@@ -18,8 +18,7 @@ include("../Utilities/Plot.jl")
 
 systemData = MBD.CR3BPSystemData("Earth", "Moon")
 dynamicsModel = MBD.CR3BPDynamicsModel(systemData)
-Earth = systemData.primaryData[1]
-Moon = systemData.primaryData[2]
+Earth::MBD.BodyData, Moon::MBD.BodyData = systemData.primaryData[1], systemData.primaryData[2]
 LagrangePoints::Vector{Vector{Float64}} = [getEquilibriumPoint(dynamicsModel, l) for l = 1:5]
 
 propagator = MBD.Propagator()
@@ -65,11 +64,9 @@ eigenSort!(family)
 # println("Plotting orbit...")
 # plotOrbit::Int64 = getNumMembers(family)
 # orbitArc::MBD.CR3BPArc = propagate(propagator, family.initialConditions[plotOrbit], [0, family.periods[plotOrbit]], dynamicsModel)
-# xData::Vector{Float64} = Vector{Float64}(undef, getStateCount(orbitArc))
-# yData::Vector{Float64} = Vector{Float64}(undef, getStateCount(orbitArc))
+# xData::Vector{Float64}, yData::Vector{Float64} = Vector{Float64}(undef, getStateCount(orbitArc)), Vector{Float64}(undef, getStateCount(orbitArc))
 # for s::Int64 in 1:getStateCount(orbitArc)
-#     xData[s] = orbitArc.states[s][1]
-#     yData[s] = orbitArc.states[s][2]
+#     xData[s], yData[s] = orbitArc.states[s][1], orbitArc.states[s][2]
 # end
 # (figure, axis) = set2DPlotParameters(L"Earth-Moon $L_{1}$ Lyapunov ($JC=%$(round(getJacobiConstant(dynamicsModel, family.initialConditions[plotOrbit]); digits = 4))$)", L"$x$ [ndim]", L"$y$ [ndim]")
 # GLMakie.lines!(axis, xData, yData, color = :white, label = L"$L_{1}$ Lyapunov Orbit")
