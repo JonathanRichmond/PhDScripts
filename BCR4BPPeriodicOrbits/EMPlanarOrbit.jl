@@ -3,12 +3,12 @@ Script for BCR4BP Earth-Moon planar orbits
 
 Author: Jonathan Richmond
 C: 4/23/25
-U: 6/9/25
+U: 6/10/25
 """
 module EMPlanar
 println()
 
-using MBD, LinearAlgebra, Logging, MATLAB
+using MBD, Logging, MATLAB
 
 global_logger(ConsoleLogger(stderr, Logging.Warn)) # Debug, Info, Warn, Error
 
