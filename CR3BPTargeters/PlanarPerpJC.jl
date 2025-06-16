@@ -3,7 +3,7 @@ Jacobi constant perpendicular crossing targeter for CR3BP planar orbits
 
 Author: Jonathan Richmond
 C: 2/4/25
-U: 6/6/25
+U: 6/11/25
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, StaticArrays
@@ -133,7 +133,7 @@ function getPeriod(targeter::PlanarPerpJCTargeter, solution::MBD.CR3BPMultipleSh
 end
 
 """
-    interpOrbit(targeter, fileName, paramName, paramValue; printProgress, tol)
+    interpOrbit(targeter, fileName, paramName, paramValue; choiceIndex, printProgress, tol)
 
 Return interpolated periodic orbit object via bisection
 
@@ -142,10 +142,11 @@ Return interpolated periodic orbit object via bisection
 - `fileName::String`: Family data CSV file
 - `paramName::String`: Desired parameter name
 - `paramValue::Float64`: Desired parameter value
+- `choiceIndex::Int64`: Desired orbit option index (default = 1)
 - `printProgress::Bool`: Print progress? (default = false)
 - `tol::Float64`: Convergence tolerance (default = 1E-11)
 """
-function interpOrbit(targeter::PlanarPerpJCTargeter, fileName::String, paramName::String, paramValue::Float64, printProgress::Bool = false, tol::Float64 = 1E-11)
+function interpOrbit(targeter::PlanarPerpJCTargeter, fileName::String, paramName::String, paramValue::Float64; choiceIndex::Int64 = 1, printProgress::Bool = false, tol::Float64 = 1E-11)
     familyData::DataFrames.DataFrame = DataFrames.DataFrame(CSV.File(fileName))
     nMem::Int16 = Int16(size(familyData, 1))
     !any(occursin.(paramName, names(familyData))) && throw(ErrorException("Parameter not supported"))
@@ -168,9 +169,8 @@ function interpOrbit(targeter::PlanarPerpJCTargeter, fileName::String, paramName
     nSol::Int16 = Int16(length(solutionIndices))
     index::Int16 = solutionIndices[1]
     if nSol > Int16(1)
-        println("$nSol orbit options exist; choosing most unstable...")
-        stability::Vector{Float64} = [familyData[solutionIndices[s],"Stability Index"] for s in 1:nSol]
-        index = solutionIndices[argmax(stability)]
+        println("$nSol orbit options exist; choosing selected index...")
+        index = solutionIndices[choiceIndex]
     end
     propagator = MBD.Propagator(equationType = MBD.STM)
     nStates::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)

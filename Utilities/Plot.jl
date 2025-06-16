@@ -3,6 +3,7 @@ Plot utility functions
 
 Author: Jonathan Richmond
 C: 6/3/25
+U: 6/11/25
 """
 
 using MBD, GLMakie, LaTeXStrings
@@ -52,7 +53,7 @@ Return 3-D plot figure and axes
 function set3DPlotParameters(plotTitle::LaTeXStrings.LaTeXString, plotXLabel::LaTeXStrings.LaTeXString, plotYLabel::LaTeXStrings.LaTeXString, plotZLabel::LaTeXStrings.LaTeXString)
     GLMakie.set_theme!(GLMakie.theme_black())
     figure = GLMakie.Figure(size = primary_resolution(), font = "CMU Serif", fontsize = 30)
-    axis = GLMakie.Axis3(figure[1,1], aspect = GLMakie.DataAspect(), title = plotTitle, xlabel = plotXLabel, ylabel = plotYLabel, zlabel = plotZLabel)
+    axis = GLMakie.Axis3(figure[1,1], aspect = :data, title = plotTitle, xlabel = plotXLabel, ylabel = plotYLabel, zlabel = plotZLabel)
 
     return (figure, axis)
 end
