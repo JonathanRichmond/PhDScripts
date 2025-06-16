@@ -3,7 +3,7 @@ Period perpendicular crossing targeter for BCR4BP planar orbits
 
 Author: Jonathan Richmond
 C: 4/9/25
-U: 6/9/25
+U: 6/12/25
 """
 
 using MBD, DifferentialEquations, Logging, StaticArrays
@@ -51,10 +51,11 @@ function correct(targeter::PlanarPerpP12Targeter, q0::Vector{Float64}, targetP::
     terminalNode = MBD.BCR4BP12Node(halfPeriod, qPCGuess, targeter.dynamicsModel)
     terminalNode.state.name = "Target State"
     segment = MBD.BCR4BP12Segment(halfPeriod, originNode, terminalNode)
+    setFreeVariableMask!(segment.TOF, [false])
     problem = MBD.BCR4BP12MultipleShooterProblem()
     addSegment!(problem, segment)
     addConstraint!(problem, MBD.BCR4BP12ContinuityConstraint(segment))
-    addConstraint!(problem, MBD.BCR4BP12StateConstraint(terminalNode, [2, 4, 7], [0, 0, q0[7]-synRevs*pi]))
+    addConstraint!(problem, MBD.BCR4BP12StateConstraint(terminalNode, [2, 4], [0.0, 0.0]))
     checkJacobian(problem; relTol = JTol)
     shooter = MBD.BCR4BP12MultipleShooter(tol)
     # shooter.printProgress = true
@@ -121,34 +122,33 @@ function getResonantOrbit(targeter::PlanarPerpP12Targeter, initialOrbit::MBD.CR3
     solution::MBD.BCR4BP12MultipleShooterProblem = homotopy(targeter, initialStateGuess, p, q, Deltaeps = Deltaeps, tol = tol, JTol = JTol)
     refinedSolution::MBD.BCR4BP12MultipleShooterProblem = correct(targeter, solution.nodes[1].state.data[1:7], q*getSynodicPeriod(targeter.dynamicsModel), q, tol = refTol, JTol = JTol)
     println("Converged $p:$q BCR4BP Orbit:\n\tIC:\t$(refinedSolution.nodes[1].state.data[1:7])\n\tP:\t$(getPeriod(targeter, refinedSolution))\n")
-    orbit = MBD.BCR4BP12PeriodicOrbit(dynamicsModel, refinedSolution.nodes[1].state.data[1:7], getPeriod(targeter, refinedSolution), getMonodromy(targeter, refinedSolution))
+    orbit = MBD.BCR4BP12PeriodicOrbit(refinedSolution.nodes[1].dynamicsModel, refinedSolution.nodes[1].state.data[1:7], getPeriod(targeter, refinedSolution), getMonodromy(targeter, refinedSolution))
 
     return orbit
 end
 
 """
-    homotopy(targeter, CR3BPq0, p, q; Deltaeps, tol, JTol)
+    homotopy(targeter, initialStateGuess, p, q; Deltaeps, tol, JTol)
 
 Return continued BCR4BP P1-P2 solution
 
 # Arguments
 - `targeter::PlanarPerpP12Targeter`: BCR4BP P1-P2 planar perpendicular crossing period targeter object
-- `CR3BPq0::Vector{Float64}`: CR3BP initial condition [ndim]
+- `initialStateGuess::Vector{Float64}`: Initial condition guess [ndim]
 - `p::Int64`: Orbit revolutions
 - `q::Int64`: Synodic revolutions
 - `Deltaeps::Float64`: Homotopy parameter step (Sun mass)
 - `tol::Float64`: Convergence tolerance (default = 1E-11)
 - `JTol::Float64`: Jacobian accuracy tolerance (default = 2E-3)
 """
-function homotopy(targeter::PlanarPerpP12Targeter, CR3BPq0::Vector{Float64}, p::Int64, q::Int64; Deltaeps::Float64 = 0.001, tol::Float64 = 1E-11, JTol::Float64 = 2E-3)
-    initialStateGuess::Vector{Float64} = copy(CR3BPq0)
+function homotopy(targeter::PlanarPerpP12Targeter, initialStateGuess::Vector{Float64}, p::Int64, q::Int64; Deltaeps::Float64 = 0.001, tol::Float64 = 1E-11, JTol::Float64 = 2E-3)
     homoSystemData::MBD.BCR4BPSystemData = MBD.shallowClone(targeter.dynamicsModel.systemData)
     homoDynamicsModel = MBD.BCR4BP12DynamicsModel(homoSystemData)
     homoTargeter = PlanarPerpP12Targeter(homoDynamicsModel)
     SunGravParam::Float64 = copy(homoSystemData.primaryData[3].gravParam)
     homoSystemData.primaryData[3].gravParam = 0.0
     targetP::Float64 = q*getSynodicPeriod(homoDynamicsModel)
-    solution::MBD.BCR4BP12MultipleShooterProblem = correct(homoTargeter, CR3BPq0, targetP, q; tol = tol, JTol = JTol)
+    solution::MBD.BCR4BP12MultipleShooterProblem = correct(homoTargeter, initialStateGuess, targetP, q; tol = tol, JTol = JTol)
     println("\nConverged $p:$q CR3BP Orbit:\n\tIC:\t$(solution.nodes[1].state.data[1:7])\n\tP:\t$(getPeriod(homoTargeter, solution))\n")
     
     epsilon = Deltaeps
