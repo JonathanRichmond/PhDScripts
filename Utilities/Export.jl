@@ -3,14 +3,14 @@ Export utility functions
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 6/10/25
+U: 6/18/25
 """
 
 using MBD, CSV, DataFrames, LinearAlgebra, MATLAB
 
 export CSVExportCR3BPFamily, exportBCR4BP12Manifold, exportBCR4BP12Orbit, exportBCR4BP12Trajectory
-export exportCR3BPManifold, exportCR3BPOrbit, exportCR3BPTrajectory, exportPseudoManifold
-export fullExportCR3BPFamily, MATExportCR3BPFamily
+export exportBCR4BP41Trajectory, exportCR3BPManifold, exportCR3BPOrbit, exportCR3BPTrajectory
+export exportPseudoManifold, fullExportCR3BPFamily, MATExportCR3BPFamily
 
 """
     BCR4BP12Orb(x, y, z, xdot, ydot, zdot, theta4, t, H, P, varsig)
@@ -102,6 +102,40 @@ struct BCR4BP12Man
 
     function BCR4BP12Man(orbit::BCR4BP12Orb, arcs::Vector{BCR4BP12Traj}, TOF::Float64)
         this = new(arcs, length(arcs), orbit, TOF)
+
+        return this
+    end
+end
+
+"""
+    BCR4BP41Traj(x, y, z, xdot, ydot, zdot, theta2, t, H)
+
+BCR4BP P4-B1 trajectory export object
+
+# Arguments
+- `x::Vector{Float64}`: x data [ndim]
+- `y::Vector{Float64}`: y data [ndim]
+- `z::Vector{Float64}`: z data [ndim]
+- `xdot::Vector{Float64}`: xdot data [ndim]
+- `ydot::Vector{Float64}`: ydot data [ndim]
+- `zdot::Vector{Float64}`: zdot data [ndim]
+- `theta2::Vector{Float64}`: theta2 data [ndim]
+- `t::Vector{Float64}`: Time data [ndim]
+- `H::Vector{Float64}`: Hamiltonian data [ndim]
+"""
+struct BCR4BP41Traj
+    H::Vector{Float64}                                                  # Hamiltonian data [ndim]
+    t::Vector{Float64}                                                  # Time data [ndim]
+    theta2::Vector{Float64}                                             # theta2 data [ndim]
+    x::Vector{Float64}                                                  # x data [ndim]
+    xdot::Vector{Float64}                                               # xdot data [ndim]
+    y::Vector{Float64}                                                  # y data [ndim]
+    ydot::Vector{Float64}                                               # ydot data [ndim]
+    z::Vector{Float64}                                                  # z data [ndim]
+    zdot::Vector{Float64}                                               # zdot data [ndim]
+
+    function BCR4BP41Traj(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta2::Vector{Float64}, t::Vector{Float64}, H::Vector{Float64})
+        this = new(H, t, theta2, x, xdot, y, ydot, z, zdot)
 
         return this
     end
@@ -327,6 +361,75 @@ function exportBCR4BP12Manifold(manifold::MBD.BCR4BP12Manifold, file::MATLAB.Mat
 end
 
 """
+    exportBCR4BP12Manifold(manifold, manifoldArcs, file, name)
+
+Export BCR4BP P1-P2 manifold data to MAT file
+
+# Arguments
+- `manifold::BCR4BP12Manifold`: BCR4BP P1-P2 manifold object
+- `manifoldArcs::Vector{BCR4BP12ManifoldArc}`: BCR4BP P1-P2 manifold arcs
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportBCR4BP12Manifold(manifold::MBD.BCR4BP12Manifold, manifoldArcs::Vector{MBD.BCR4BP12ManifoldArc}, file::MATLAB.MatFile, name::Symbol)
+    propagator = MBD.Propagator()
+    orbitArc::MBD.BCR4BP12Arc = propagate(propagator, manifold.periodicOrbit.initialCondition, [0, manifold.periodicOrbit.period], manifold.periodicOrbit.dynamicsModel)
+    nStates::Int64 = getStateCount(orbitArc)
+    orbitx::Vector{Float64} = zeros(Float64, nStates)
+    orbity::Vector{Float64} = zeros(Float64, nStates)
+    orbitz::Vector{Float64} = zeros(Float64, nStates)
+    orbitxdot::Vector{Float64} = zeros(Float64, nStates)
+    orbitydot::Vector{Float64} = zeros(Float64, nStates)
+    orbitzdot::Vector{Float64} = zeros(Float64, nStates)
+    orbitt::Vector{Float64} = zeros(Float64, nStates)
+    orbittheta4::Vector{Float64} = zeros(Float64, nStates)
+    orbitH::Vector{Float64} = zeros(Float64, nStates)
+    for s::Int64 in 1:nStates
+        state::Vector{Float64} = getStateByIndex(orbitArc, s)
+        orbitx[s] = state[1]
+        orbity[s] = state[2]
+        orbitz[s] = state[3]
+        orbitxdot[s] = state[4]
+        orbitydot[s] = state[5]
+        orbitzdot[s] = state[6]
+        orbittheta4[s] = state[7]
+        orbitt[s] = getTimeByIndex(orbitArc, s)
+        orbitH[s] = getHamiltonian(manifold.periodicOrbit.dynamicsModel, state)
+    end
+    orb = BCR4BP12Orb(orbitx, orbity, orbitz, orbitxdot, orbitydot, orbitzdot, orbittheta4, orbitt, orbitH, manifold.periodicOrbit.period, getStabilityIndex(manifold.periodicOrbit))
+    numArcs::Int64 = length(manifoldArcs)
+    arcs::Vector{BCR4BP12Traj} = Vector{BCR4BP12Traj}(undef, numArcs)
+    for a = 1:numArcs
+        arc::MBD.BCR4BP12Arc = propagate(propagator, real(manifoldArcs[a].initialCondition), [0, manifoldArcs[a].TOF], manifold.periodicOrbit.dynamicsModel)
+        numStates::Int64 = getStateCount(arc)
+        x::Vector{Float64} = zeros(Float64, numStates)
+        y::Vector{Float64} = zeros(Float64, numStates)
+        z::Vector{Float64} = zeros(Float64, numStates)
+        xdot::Vector{Float64} = zeros(Float64, numStates)
+        ydot::Vector{Float64} = zeros(Float64, numStates)
+        zdot::Vector{Float64} = zeros(Float64, numStates)
+        theta4::Vector{Float64} = zeros(Float64, numStates)
+        t::Vector{Float64} = zeros(Float64, numStates)
+        H::Vector{Float64} = zeros(Float64, numStates)
+        for s::Int64 in 1:numStates
+            state::Vector{Float64} = getStateByIndex(arc, s)
+            x[s] = state[1]
+            y[s] = state[2]
+            z[s] = state[3]
+            xdot[s] = state[4]
+            ydot[s] = state[5]
+            zdot[s] = state[6]
+            theta4[s] = state[7]
+            t[s] = getTimeByIndex(arc, s)
+            H[s] = getHamiltonian(manifold.periodicOrbit.dynamicsModel, state)
+        end
+        arcs[a] = BCR4BP12Traj(x, y, z, xdot, ydot, zdot, theta4, t, H)
+    end
+    man = BCR4BP12Man(orb, arcs, manifold.TOF)
+    MATLAB.put_variable(file, name, man)
+end
+
+"""
     exportBCR4BP12Orbit(orbit, file, name)
 
 Export BCR4BP P1-P2 orbit data to MAT file
@@ -346,8 +449,8 @@ function exportBCR4BP12Orbit(orbit::MBD.BCR4BP12PeriodicOrbit, file::MATLAB.MatF
     xdot::Vector{Float64} = zeros(Float64, nStates)
     ydot::Vector{Float64} = zeros(Float64, nStates)
     zdot::Vector{Float64} = zeros(Float64, nStates)
-    t::Vector{Float64} = zeros(Float64, nStates)
     theta4::Vector{Float64} = zeros(Float64, nStates)
+    t::Vector{Float64} = zeros(Float64, nStates)
     H::Vector{Float64} = zeros(Float64, nStates)
     for s::Int64 in 1:nStates
         state::Vector{Float64} = getStateByIndex(orbitArc, s)
@@ -391,6 +494,52 @@ function exportBCR4BP12Orbit(x::Vector{Float64}, y::Vector{Float64}, z::Vector{F
 end
 
 """
+    exportBCR4BP12Trajectory(x0, y0, z0, xdot0, ydot0, zdot0, theta40, propTime, dynamicsModel, file, name)
+
+Export BCR4BP P1-P2 trajectory data to MAT file
+
+# Arguments
+- `x0::Float64`: Initial x-position [ndim]
+- `y0::Float64`: Initial y-position [ndim]
+- `z0::Float64`: Initial z-position [ndim]
+- `xdot0::Float64`: Initial x-velocity [ndim]
+- `ydot0::Float64`: Initial y-velocity [ndim]
+- `zdot0::Float64`: Initial z-velocity [ndim]
+- `theta40::Float64`: Initial P4 angle [ndim]
+- `propTime::Float64`: Propagation time [ndim]
+- `dynamicsModel::BCR4BP12DynamicsModel`: BCR4BP P1-P2 dynamics model object
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportBCR4BP12Trajectory(x0::Float64, y0::Float64, z0::Float64, xdot0::Float64, ydot0::Float64, zdot0::Float64, theta40::Float64, propTime::Float64, dynamicsModel::MBD.BCR4BP12DynamicsModel, file::MATLAB.MatFile, name::Symbol)
+    propagator = MBD.Propagator()
+    arc::MBD.BCR4BP12Arc = propagate(propagator, [x0, y0, z0, xdot0, ydot0, zdot0, theta40], [0, propTime], dynamicsModel)
+    nStates::Int64 = getStateCount(arc)
+    x::Vector{Float64} = zeros(Float64, nStates)
+    y::Vector{Float64} = zeros(Float64, nStates)
+    z::Vector{Float64} = zeros(Float64, nStates)
+    xdot::Vector{Float64} = zeros(Float64, nStates)
+    ydot::Vector{Float64} = zeros(Float64, nStates)
+    zdot::Vector{Float64} = zeros(Float64, nStates)
+    theta4::Vector{Float64} = zeros(Float64, nStates)
+    t::Vector{Float64} = zeros(Float64, nStates)
+    H::Vector{Float64} = zeros(Float64, nStates)
+    for s::Int64 in 1:nStates
+        state::Vector{Float64} = getStateByIndex(arc, s)
+        x[s] = state[1]
+        y[s] = state[2]
+        z[s] = state[3]
+        xdot[s] = state[4]
+        ydot[s] = state[5]
+        zdot[s] = state[6]
+        theta4[s] = state[7]
+        t[s] = getTimeByIndex(arc, s)
+        H[s] = getHamiltonian(dynamicsModel, state)
+    end
+    exportBCR4BP12Trajectory(x, y, z, xdot, ydot, zdot, theta4, t, H, file, name)
+end
+
+"""
     exportBCR4BP12Trajectory(x, y, z, xdot, ydot, zdot, theta4, t, H, file, name)
 
 Export BCR4BP P1-P2 trajectory data to MAT file
@@ -410,6 +559,75 @@ Export BCR4BP P1-P2 trajectory data to MAT file
 """
 function exportBCR4BP12Trajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta4::Vector{Float64}, t::Vector{Float64}, H::Vector{Float64}, file::MATLAB.MatFile, name::Symbol)
     traj = BCR4BP12Traj(x, y, z, xdot, ydot, zdot, theta4, t, H)
+    MATLAB.put_variable(file, name, traj)
+end
+
+"""
+    exportBCR4BP41Trajectory(x0, y0, z0, xdot0, ydot0, zdot0, theta20, propTime, dynamicsModel, file, name)
+
+Export BCR4BP P4-B1 trajectory data to MAT file
+
+# Arguments
+- `x0::Float64`: Initial x-position [ndim]
+- `y0::Float64`: Initial y-position [ndim]
+- `z0::Float64`: Initial z-position [ndim]
+- `xdot0::Float64`: Initial x-velocity [ndim]
+- `ydot0::Float64`: Initial y-velocity [ndim]
+- `zdot0::Float64`: Initial z-velocity [ndim]
+- `theta20::Float64`: Initial P2 angle [ndim]
+- `propTime::Float64`: Propagation time [ndim]
+- `dynamicsModel::BCR4BP41DynamicsModel`: BCR4BP P4-B1 dynamics model object
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportBCR4BP41Trajectory(x0::Float64, y0::Float64, z0::Float64, xdot0::Float64, ydot0::Float64, zdot0::Float64, theta20::Float64, propTime::Float64, dynamicsModel::MBD.BCR4BP41DynamicsModel, file::MATLAB.MatFile, name::Symbol)
+    propagator = MBD.Propagator()
+    arc::MBD.BCR4BP41Arc = propagate(propagator, [x0, y0, z0, xdot0, ydot0, zdot0, theta20], [0, propTime], dynamicsModel)
+    nStates::Int64 = getStateCount(arc)
+    x::Vector{Float64} = zeros(Float64, nStates)
+    y::Vector{Float64} = zeros(Float64, nStates)
+    z::Vector{Float64} = zeros(Float64, nStates)
+    xdot::Vector{Float64} = zeros(Float64, nStates)
+    ydot::Vector{Float64} = zeros(Float64, nStates)
+    zdot::Vector{Float64} = zeros(Float64, nStates)
+    theta2::Vector{Float64} = zeros(Float64, nStates)
+    t::Vector{Float64} = zeros(Float64, nStates)
+    H::Vector{Float64} = zeros(Float64, nStates)
+    for s::Int64 in 1:nStates
+        state::Vector{Float64} = getStateByIndex(arc, s)
+        x[s] = state[1]
+        y[s] = state[2]
+        z[s] = state[3]
+        xdot[s] = state[4]
+        ydot[s] = state[5]
+        zdot[s] = state[6]
+        theta2[s] = state[7]
+        t[s] = getTimeByIndex(arc, s)
+        H[s] = getHamiltonian(dynamicsModel, state)
+    end
+    exportBCR4BP41Trajectory(x, y, z, xdot, ydot, zdot, theta2, t, H, file, name)
+end
+
+"""
+    exportBCR4BP41Trajectory(x, y, z, xdot, ydot, zdot, theta2, t, H, file, name)
+
+Export BCR4BP P4-B1 trajectory data to MAT file
+
+# Arguments
+- `x::Vector{Float64}`: x data [ndim]
+- `y::Vector{Float64}`: y data [ndim]
+- `z::Vector{Float64}`: z data [ndim]
+- `xdot::Vector{Float64}`: xdot data [ndim]
+- `ydot::Vector{Float64}`: ydot data [ndim]
+- `zdot::Vector{Float64}`: zdot data [ndim]
+- `theta2::Vector{Float64}`: theta2 data [ndim]
+- `t::Vector{Float64}`: Time data [ndim]
+- `H::Vector{Float64}`: Hamiltonian data [ndim]
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportBCR4BP41Trajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta2::Vector{Float64}, t::Vector{Float64}, H::Vector{Float64}, file::MATLAB.MatFile, name::Symbol)
+    traj = BCR4BP41Traj(x, y, z, xdot, ydot, zdot, theta2, t, H)
     MATLAB.put_variable(file, name, traj)
 end
 
@@ -449,6 +667,67 @@ function exportCR3BPManifold(manifold::MBD.CR3BPManifold, file::MATLAB.MatFile, 
     arcs::Vector{CR3BPTraj} = Vector{CR3BPTraj}(undef, numArcs)
     for a = 1:numArcs
         arc::MBD.CR3BPArc = propagate(propagator, real(manifold.initialConditions[a]), [0, manifold.TOF], manifold.periodicOrbit.dynamicsModel)
+        numStates::Int64 = getStateCount(arc)
+        x::Vector{Float64} = zeros(Float64, numStates)
+        y::Vector{Float64} = zeros(Float64, numStates)
+        z::Vector{Float64} = zeros(Float64, numStates)
+        xdot::Vector{Float64} = zeros(Float64, numStates)
+        ydot::Vector{Float64} = zeros(Float64, numStates)
+        zdot::Vector{Float64} = zeros(Float64, numStates)
+        t::Vector{Float64} = zeros(Float64, numStates)
+        for s::Int64 in 1:numStates
+            state::Vector{Float64} = getStateByIndex(arc, s)
+            x[s] = state[1]
+            y[s] = state[2]
+            z[s] = state[3]
+            xdot[s] = state[4]
+            ydot[s] = state[5]
+            zdot[s] = state[6]
+            t[s] = getTimeByIndex(arc, s)
+        end
+        arcs[a] = CR3BPTraj(x, y, z, xdot, ydot, zdot, t, getJacobiConstant(manifold.periodicOrbit.dynamicsModel, getStateByIndex(arc, 1)))
+    end
+    man = CR3BPMan(orb, arcs, manifold.TOF)
+    MATLAB.put_variable(file, name, man)
+end
+
+"""
+    exportCR3BPManifold(manifold, manifoldArcs, file, name)
+
+Export CR3BP manifold data to MAT file
+
+# Arguments
+- `manifold::CR3BPManifold`: CR3BP manifold object
+- `manifoldArcs::Vector{CR3BPManifold}`: CR3BP manifold arcs
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportCR3BPManifold(manifold::MBD.CR3BPManifold, manifoldArcs::Vector{MBD.CR3BPManifoldArc}, file::MATLAB.MatFile, name::Symbol)
+    propagator = MBD.Propagator()
+    orbitArc::MBD.CR3BPArc = propagate(propagator, manifold.periodicOrbit.initialCondition, [0, manifold.periodicOrbit.period], manifold.periodicOrbit.dynamicsModel)
+    nStates::Int64 = getStateCount(orbitArc)
+    orbitx::Vector{Float64} = zeros(Float64, nStates)
+    orbity::Vector{Float64} = zeros(Float64, nStates)
+    orbitz::Vector{Float64} = zeros(Float64, nStates)
+    orbitxdot::Vector{Float64} = zeros(Float64, nStates)
+    orbitydot::Vector{Float64} = zeros(Float64, nStates)
+    orbitzdot::Vector{Float64} = zeros(Float64, nStates)
+    orbitt::Vector{Float64} = zeros(Float64, nStates)
+    for s::Int64 in 1:nStates
+        state::Vector{Float64} = getStateByIndex(orbitArc, s)
+        orbitx[s] = state[1]
+        orbity[s] = state[2]
+        orbitz[s] = state[3]
+        orbitxdot[s] = state[4]
+        orbitydot[s] = state[5]
+        orbitzdot[s] = state[6]
+        orbitt[s] = getTimeByIndex(orbitArc, s)
+    end
+    orb = CR3BPOrb(orbitx, orbity, orbitz, orbitxdot, orbitydot, orbitzdot, orbitt, manifold.periodicOrbit.period, getJacobiConstant(manifold.periodicOrbit), getStabilityIndex(manifold.periodicOrbit))
+    numArcs::Int64 = length(manifoldArcs)
+    arcs::Vector{CR3BPTraj} = Vector{CR3BPTraj}(undef, numArcs)
+    for a = 1:numArcs
+        arc::MBD.CR3BPArc = propagate(propagator, real(manifoldArcs[a].initialCondition), [0, manifoldArcs[a].TOF], manifold.periodicOrbit.dynamicsModel)
         numStates::Int64 = getStateCount(arc)
         x::Vector{Float64} = zeros(Float64, numStates)
         y::Vector{Float64} = zeros(Float64, numStates)
@@ -534,6 +813,48 @@ function exportCR3BPOrbit(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Floa
 end
 
 """
+    exportCR3BPTrajectory(x0, y0, z0, xdot0, ydot0, zdot0, propTime, dynamicsModel, file, name)
+
+Export CR3BP trajectory data to MAT file
+
+# Arguments
+- `x0::Float64`: Initial x-position [ndim]
+- `y0::Float64`: Initial y-position [ndim]
+- `z0::Float64`: Initial z-position [ndim]
+- `xdot0::Float64`: Initial x-velocity [ndim]
+- `ydot0::Float64`: Initial y-velocity [ndim]
+- `zdot0::Float64`: Initial z-velocity [ndim]
+- `propTime::Float64`: Propagation time [ndim]
+- `dynamicsModel::CR3BPDynamicsModel`: CR3BP dynamics model object
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportCR3BPTrajectory(x0::Float64, y0::Float64, z0::Float64, xdot0::Float64, ydot0::Float64, zdot0::Float64, propTime::Float64, dynamicsModel::MBD.CR3BPDynamicsModel, file::MATLAB.MatFile, name::Symbol)
+    propagator = MBD.Propagator()
+    arc::MBD.CR3BPArc = propagate(propagator, [x0, y0, z0, xdot0, ydot0, zdot0], [0, propTime], dynamicsModel)
+    nStates::Int64 = getStateCount(arc)
+    x::Vector{Float64} = zeros(Float64, nStates)
+    y::Vector{Float64} = zeros(Float64, nStates)
+    z::Vector{Float64} = zeros(Float64, nStates)
+    xdot::Vector{Float64} = zeros(Float64, nStates)
+    ydot::Vector{Float64} = zeros(Float64, nStates)
+    zdot::Vector{Float64} = zeros(Float64, nStates)
+    t::Vector{Float64} = zeros(Float64, nStates)
+    for s::Int64 in 1:nStates
+        state::Vector{Float64} = getStateByIndex(arc, s)
+        x[s] = state[1]
+        y[s] = state[2]
+        z[s] = state[3]
+        xdot[s] = state[4]
+        ydot[s] = state[5]
+        zdot[s] = state[6]
+        t[s] = getTimeByIndex(arc, s)
+    end
+    JC::Float64 = getJacobiConstant(dynamicsModel, [x0, y0, z0, xdot0, ydot0, zdot0])
+    exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, JC, file, name)
+end
+
+"""
     exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, JC, file, name)
 
 Export CR3BP trajectory data to MAT file
@@ -591,6 +912,71 @@ function exportPseudoManifold(pseudoManifold::MBD.BCR4BPPseudoManifold, file::MA
     arcs::Vector{BCR4BP12Traj} = Vector{BCR4BP12Traj}(undef, numArcs)
     for a = 1:numArcs
         arc::MBD.BCR4BP12Arc = propagate(propagator, real(pseudoManifold.initialConditions[a]), [0, pseudoManifold.TOF], pseudoManifold.dynamicsModel)
+        numStates::Int64 = getStateCount(arc)
+        x::Vector{Float64} = zeros(Float64, numStates)
+        y::Vector{Float64} = zeros(Float64, numStates)
+        z::Vector{Float64} = zeros(Float64, numStates)
+        xdot::Vector{Float64} = zeros(Float64, numStates)
+        ydot::Vector{Float64} = zeros(Float64, numStates)
+        zdot::Vector{Float64} = zeros(Float64, numStates)
+        theta4::Vector{Float64} = zeros(Float64, numStates)
+        t::Vector{Float64} = zeros(Float64, numStates)
+        H::Vector{Float64} = zeros(Float64, numStates)
+        for s::Int64 in 1:numStates
+            state::Vector{Float64} = getStateByIndex(arc, s)
+            x[s] = state[1]
+            y[s] = state[2]
+            z[s] = state[3]
+            xdot[s] = state[4]
+            ydot[s] = state[5]
+            zdot[s] = state[6]
+            theta4[s] = state[7]
+            t[s] = getTimeByIndex(arc, s)
+            H[s] = getHamiltonian(pseudoManifold.dynamicsModel, state)
+        end
+        arcs[a] = BCR4BP12Traj(x, y, z, xdot, ydot, zdot, theta4, t, H)
+    end
+    pseudoMan = PseudoMan(orb, arcs, pseudoManifold.TOF)
+    MATLAB.put_variable(file, name, pseudoMan)
+end
+
+"""
+    exportPseudoManifold(pseudoManifold, pseudoManifoldArcs, file, name)
+
+Export pseudo-manifold data to MAT file
+
+# Arguments
+- `pseudoManifold::BCR4BPPseudoManifold`: BCR4BP pseudo-manifold object
+- `pseudoManifoldArcs::Vector{BCR4BPPseudoManifoldArc}`: BCR4BP pseudo-manifold arcs
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportPseudoManifold(pseudoManifold::MBD.BCR4BPPseudoManifold, pseudoManifoldArcs::Vector{MBD.BCR4BPPseudoManifoldArc}, file::MATLAB.MatFile, name::Symbol)
+    propagator = MBD.Propagator()
+    orbitArc::MBD.CR3BPArc = propagate(propagator, pseudoManifold.periodicOrbit.initialCondition, [0, pseudoManifold.periodicOrbit.period], pseudoManifold.periodicOrbit.dynamicsModel)
+    nStates::Int64 = getStateCount(orbitArc)
+    orbitx::Vector{Float64} = zeros(Float64, nStates)
+    orbity::Vector{Float64} = zeros(Float64, nStates)
+    orbitz::Vector{Float64} = zeros(Float64, nStates)
+    orbitxdot::Vector{Float64} = zeros(Float64, nStates)
+    orbitydot::Vector{Float64} = zeros(Float64, nStates)
+    orbitzdot::Vector{Float64} = zeros(Float64, nStates)
+    orbitt::Vector{Float64} = zeros(Float64, nStates)
+    for s::Int64 in 1:nStates
+        state::Vector{Float64} = getStateByIndex(orbitArc, s)
+        orbitx[s] = state[1]
+        orbity[s] = state[2]
+        orbitz[s] = state[3]
+        orbitxdot[s] = state[4]
+        orbitydot[s] = state[5]
+        orbitzdot[s] = state[6]
+        orbitt[s] = getTimeByIndex(orbitArc, s)
+    end
+    orb = CR3BPOrb(orbitx, orbity, orbitz, orbitxdot, orbitydot, orbitzdot, orbitt, pseudoManifold.periodicOrbit.period, getJacobiConstant(pseudoManifold.periodicOrbit), getStabilityIndex(pseudoManifold.periodicOrbit))
+    numArcs::Int64 = length(pseudoManifoldArcs)
+    arcs::Vector{BCR4BP12Traj} = Vector{BCR4BP12Traj}(undef, numArcs)
+    for a = 1:numArcs
+        arc::MBD.BCR4BP12Arc = propagate(propagator, pseudoManifoldArcs[a].initialCondition, [0, pseudoManifoldArcs[a].TOF], pseudoManifold.dynamicsModel)
         numStates::Int64 = getStateCount(arc)
         x::Vector{Float64} = zeros(Float64, numStates)
         y::Vector{Float64} = zeros(Float64, numStates)
