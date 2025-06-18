@@ -3,7 +3,7 @@ Script for Earth-Moon CR3BP L1 Lyapunov orbit family
 
 Author: Jonathan Richmond
 C: 2/4/25
-U: 6/9/25
+U: 6/18/25
 """
 module EML1Lyap
 println()
@@ -24,7 +24,7 @@ LagrangePoints::Vector{Vector{Float64}} = [getEquilibriumPoint(dynamicsModel, l)
 propagator = MBD.Propagator()
 targeter = PlanarPerpJCTargeter(dynamicsModel)
 
-(initialStateGuess::Vector{Float64}, tSpanGuess::Vector{Float64}) = getLinearVariation(dynamicsModel, 1, LagrangePoints[1], [0.005, 0, 0])
+(initialStateGuess::Vector{Float64}, tSpanGuess::Vector{Float64}) = getLinearVariation(dynamicsModel, 1, LagrangePoints[1], [0.001, 0, 0])
 targetJC::Float64 = getJacobiConstant(dynamicsModel, initialStateGuess)
 solution1::MBD.CR3BPMultipleShooterProblem = correct(targeter, initialStateGuess, tSpanGuess, targetJC)
 println("Converged Orbit 1:\n\tIC:\t$(solution1.nodes[1].state.data[1:6])\n\tP:\t$(getPeriod(targeter, solution1))\n\tJC:\t$(getJacobiConstant(dynamicsModel, solution1.nodes[1].state.data[1:6]))\n")

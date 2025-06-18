@@ -3,7 +3,7 @@ Script for BCR4BP Earth-Moon planar orbits
 
 Author: Jonathan Richmond
 C: 4/23/25
-U: 6/10/25
+U: 6/18/25
 """
 module EMPlanar
 println()
@@ -31,12 +31,12 @@ CR3BPP::Float64, targetP::Float64 = 6.2840049277323855, getSynodicPeriod(dynamic
 
 p1::Int64, q1::Int64 = 1, 1
 guessOrbit1::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, familyFile, "Period", CR3BPP*q1/p1)
-orbit1::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(targeter, guessOrbit1, p1, q1, Deltaeps = 0.01, tol = 1E-11, refTol = 1E-11, JTol = 2E-3)
+orbit1::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(targeter, guessOrbit1, 0.0, p1, q1, Deltaeps = 0.01, tol = 1E-11, refTol = 1E-11, JTol = 2E-3)
 compOrbit1::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, familyFile, "Period", targetP*q1/p1)
 
-p2::Int64, q2::Int64 = 3, 2
+p2::Int64, q2::Int64 = 2, 1
 guessOrbit2::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, familyFile, "Period", CR3BPP*q2/p2)
-orbit2::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(targeter, guessOrbit2, p2, q2, Deltaeps = 0.001, tol = 1E-9, refTol = 1E-9, JTol = 1E-2)
+orbit2::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(targeter, guessOrbit2, 0.0, p2, q2, Deltaeps = 0.01, tol = 1E-11, refTol = 1E-11, JTol = 2E-3)
 compOrbit2::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, familyFile, "Period", targetP*q2/p2)
 
 mf = MATLAB.MatFile("Output/EMPlanarOrbit.mat", "w")
