@@ -57,7 +57,7 @@ function correct(targeter::PlanarPerpP12Targeter, q0::Vector{Float64}, targetP::
     addConstraint!(problem, MBD.BCR4BP12StateConstraint(terminalNode, [2, 4], [0.0, 0.0]))
     checkJacobian(problem; relTol = JTol)
     shooter = MBD.BCR4BP12MultipleShooter(tol)
-    # shooter.printProgress = true
+    shooter.printProgress = true
     solution::MBD.BCR4BP12MultipleShooterProblem = MBD.solve!(shooter, problem)
 
     return solution
