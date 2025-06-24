@@ -3,7 +3,7 @@ Script for multiple shooter code development
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 6/5/25
+U: 6/24/25
 """
 module MSDev
 println()
@@ -36,7 +36,7 @@ indices::Vector{Int64} = round.(Int64, range(1, numStates, numNodes))
 stateGuesses::Vector{Vector{Float64}} = [getStateByIndex(guessArc, indices[i]) for i = eachindex(indices)]
 timeGuesses::Vector{Float64} = [getTimeByIndex(guessArc, indices[i]) for i = eachindex(indices)]
 
-solution1::MBD.CR3BPMultipleShooterProblem = correct(targeter, stateGuesses, timeGuesses, numSegs, targetJC)
+solution1::MBD.CR3BPMultipleShooterProblem = correct(targeter, stateGuesses, timeGuesses, numNodes, targetJC)
 println("Converged Orbit 1:\n\tState:$(solution1.nodes[1].state.data[1:6])\n\tPeriod: $(getPeriod(targeter, solution1))\n\tJC: $(getJacobiConstant(dynamicsModel, solution1.nodes[1].state.data[1:6]))\n")
 # orbit = MBD.CR3BPPeriodicOrbit(dynamicsModel, solution1.nodes[1].state.data[1:6], getPeriod(targeter, solution1), getMonodromy(targeter, solution1))
 # (lambda::Vector{Complex{Float64}}, V::Matrix{Complex{Float64}}) = getApproxEigenData(targeter, solution1)

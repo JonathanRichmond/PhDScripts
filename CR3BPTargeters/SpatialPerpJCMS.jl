@@ -3,7 +3,7 @@ Jacobi constant perpendicular crossing multiple shooter for CR3BP spatial orbits
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 6/4/25
+U: 6/24/25
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, SparseArrays, StaticArrays, Statistics
@@ -30,7 +30,7 @@ struct SpatialPerpJCMSTargeter <: MBD.AbstractTargeter
 end
 
 """
-    correct(targeter, qVector, tVector, numSegs, targetJC; tol)
+    correct(targeter, qVector, tVector, numNodes, targetJC; tol)
 
 Return corrected CR3BP multiple shooter problem object
 
@@ -38,11 +38,11 @@ Return corrected CR3BP multiple shooter problem object
 - `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
 - `qVector::Vector{Vector{Float64}}`: Node state guesses [ndim]
 - `tVector::Vector{Float64}`: Node time guesses [ndim]
-- `numSegs::Int64`: Number of segments
+- `numNodes::Int64`: Number of nodes
 - `targetJC::Float64`: Target Jacobi constant
 - `tol::Float64`: Convergence tolerance (default = 1E-11)
 """
-function correct(targeter::SpatialPerpJCMSTargeter, qVector::Vector{Vector{Float64}}, tVector::Vector{Float64}, numSegs::Int64, targetJC::Float64, tol::Float64 = 1E-11)
+function correct(targeter::SpatialPerpJCMSTargeter, qVector::Vector{Vector{Float64}}, tVector::Vector{Float64}, numNodes::Int64, targetJC::Float64, tol::Float64 = 1E-11)
     nodes::Vector{MBD.CR3BPNode} = []
     for n = 1:numNodes
         node = MBD.CR3BPNode(tVector[n], qVector[n], dynamicsModel)
@@ -54,7 +54,7 @@ function correct(targeter::SpatialPerpJCMSTargeter, qVector::Vector{Vector{Float
     problem = MBD.CR3BPMultipleShooterProblem()
     segments::Vector{MBD.CR3BPSegment} = []
     for s = 1:numNodes-1
-        segment = MBD.CR3BPSegment(timeGuesses[s+1]-timeGuesses[s], nodes[s], nodes[s+1])
+        segment = MBD.CR3BPSegment(tVector[s+1]-tVector[s], nodes[s], nodes[s+1])
         segment.TOF.name = "Segment "*string(s)*" TOF"
         push!(segments, segment)
     end
