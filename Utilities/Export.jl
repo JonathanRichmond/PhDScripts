@@ -3,7 +3,7 @@ Export utility functions
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 6/18/25
+U: 6/24/25
 """
 
 using MBD, CSV, DataFrames, LinearAlgebra, MATLAB
@@ -441,8 +441,14 @@ Export BCR4BP P1-P2 orbit data to MAT file
 """
 function exportBCR4BP12Orbit(orbit::MBD.BCR4BP12PeriodicOrbit, file::MATLAB.MatFile, name::Symbol)
     propagator = MBD.Propagator()
-    orbitArc::MBD.BCR4BP12Arc = propagate(propagator, orbit.initialCondition, [0, orbit.period], orbit.dynamicsModel)
-    nStates::Int64 = getStateCount(orbitArc)
+    orbitStates::Vector{Vector{Float64}} = []
+    orbitEpochs::Vector{Float64} = []
+    for n::Int64 in 1:length(orbit.nodeEpochs)-1
+        arc::MBD.BCR4BP12Arc = propagate(propagator, orbit.nodeStates[n], [orbit.nodeEpochs[n], orbit.nodeEpochs[n+1]], orbit.dynamicsModel)
+        append!(orbitStates, arc.states)
+        append!(orbitEpochs, arc.times)
+    end
+    nStates::Int64 = length(orbitEpochs)
     x::Vector{Float64} = zeros(Float64, nStates)
     y::Vector{Float64} = zeros(Float64, nStates)
     z::Vector{Float64} = zeros(Float64, nStates)
@@ -453,7 +459,7 @@ function exportBCR4BP12Orbit(orbit::MBD.BCR4BP12PeriodicOrbit, file::MATLAB.MatF
     t::Vector{Float64} = zeros(Float64, nStates)
     H::Vector{Float64} = zeros(Float64, nStates)
     for s::Int64 in 1:nStates
-        state::Vector{Float64} = getStateByIndex(orbitArc, s)
+        state::Vector{Float64} = orbitStates[s]
         x[s] = state[1]
         y[s] = state[2]
         z[s] = state[3]
@@ -461,7 +467,7 @@ function exportBCR4BP12Orbit(orbit::MBD.BCR4BP12PeriodicOrbit, file::MATLAB.MatF
         ydot[s] = state[5]
         zdot[s] = state[6]
         theta4[s] = state[7]
-        t[s] = getTimeByIndex(orbitArc, s)
+        t[s] = orbitEpochs[s]
         H[s] = getHamiltonian(orbit.dynamicsModel, state)
     end
     varsig::Float64 = getStabilityIndex(orbit)

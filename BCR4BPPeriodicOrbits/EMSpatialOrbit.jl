@@ -3,7 +3,7 @@ Script for BCR4BP Earth-Moon spatial orbits
 
 Author: Jonathan Richmond
 C: 6/11/25
-U: 6/23/25
+U: 6/24/25
 """
 module EMSpatial
 println()
@@ -28,11 +28,16 @@ targeter = SpatialPerpP12Targeter(dynamicsModel)
 CR3BPTargeter = SpatialPerpVyTargeter(CR3BPDynamicsModel)
 
 familyFile::String = "FamilyData/CR3BPEML2Halos.csv"
-p::Int64, q::Int64 = 3, 1
+p::Int64, q::Int64 = 5, 2
+numSegs::Int64 = 4*q
 compOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, familyFile, "Period", getSynodicPeriod(dynamicsModel)*q/p; choiceIndex = 1)
 println("Converged $p:$q CR3BP Orbit:\n\tIC:\t$(compOrbit.initialCondition)\n\tP:\t$(compOrbit.period)\n")
-q0JumpCheck = MBD.BoundingBoxJumpCheck("IntialState", [0.8 1.2; 0.0 0.1; 0.5 1.0])
-orbit::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(targeter, compOrbit, 0.0, p, q, q0JumpCheck, tol = 1E-10, JTol = 2E-2)
+# orbitArc::MBD.CR3BPArc = propagate(propagator, compOrbit.initialCondition, [0, compOrbit.period/2], CR3BPDynamicsModel)
+# halfState::Vector{Float64} = getStateByIndex(orbitArc, -1)
+# compOrbit = MBD.CR3BPPeriodicOrbit(CR3BPDynamicsModel, halfState, compOrbit.period, Matrix{Float64}(compOrbit.monodromy))
+# q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.9 1.3; -0.1 0; -0.5 0])
+q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.9 1.1; 0.01 0.1; 0.2 0.8])
+orbit::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(targeter, compOrbit, numSegs, 0.0, p, q, q0JumpCheck, tol = 1E-10, refTol = 1E-10)
 (orbitSB1::Vector{Vector{Float64}}, ~) = rotating12ToRotating41(dynamicsModel, [orbit.initialCondition], [0.0])
 
 mf = MATLAB.MatFile("Output/EMSpatialOrbit.mat", "w")

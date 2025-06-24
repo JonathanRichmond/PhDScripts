@@ -3,7 +3,7 @@ Script for comparing CR3BP and BCR4BP invariant and pseudo-manifolds
 
 Author: Jonathan Richmond
 C: 6/10/25
-U: 6/23/25
+U: 6/24/25
 """
 module ManComp
 println()
@@ -12,8 +12,8 @@ using MBD, Logging, MATLAB
 
 global_logger(ConsoleLogger(stderr, Logging.Warn)) # Debug, Info, Warn, Error
 
-include("../BCR4BPTargeters/PlanarPerpP.jl")
-include("../CR3BPTargeters/PlanarPerpJC.jl")
+include("../BCR4BPTargeters/SpatialPerpP.jl")
+include("../CR3BPTargeters/SpatialPerpVy.jl")
 include("../Utilities/Export.jl")
 
 systemData = MBD.BCR4BPSystemData("Earth", "Moon", "Sun", "Earth_Barycenter")
@@ -23,14 +23,17 @@ CR3BPDynamicsModel = MBD.CR3BPDynamicsModel(CR3BPSystemData)
 Earth::MBD.BodyData, Moon::MBD.BodyData = systemData.primaryData[1], systemData.primaryData[2]
 
 propagator = MBD.Propagator()
-targeter = PlanarPerpP12Targeter(dynamicsModel)
-CR3BPTargeter = PlanarPerpJCTargeter(CR3BPDynamicsModel)
+targeter = SpatialPerpP12Targeter(dynamicsModel)
+CR3BPTargeter = SpatialPerpVyTargeter(CR3BPDynamicsModel)
 
-familyFile::String = "FamilyData/CR3BPEML2Lyapunovs.csv"
+familyFile::String = "FamilyData/CR3BPEML2Halos.csv"
 p::Int64, q::Int64 = 2, 1
 compOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, familyFile, "Period", getSynodicPeriod(dynamicsModel)*q/p; choiceIndex = 1)
-println("Converged $p:$q CR3BP Orbit:\n\tIC:\t$(compOrbit.initialCondition)\n\tP:\t$(compOrbit.period)\n")
-q0JumpCheck = MBD.BoundingBoxJumpCheck("IntialState", [0.9 1.3; 0.0 0.5])
+println("Converged $p:$q CR3BP Orbit:\n\tIC:\t$(compOrbit.initialCondition)\n\tP:\t$(compOrbit.period)\n\tStability:\t$(getStabilityIndex(compOrbit))\n")
+orbitArc::MBD.CR3BPArc = propagate(propagator, compOrbit.initialCondition, [0, compOrbit.period/2], CR3BPDynamicsModel)
+halfState::Vector{Float64} = getStateByIndex(orbitArc, -1)
+compOrbit = MBD.CR3BPPeriodicOrbit(CR3BPDynamicsModel, halfState, compOrbit.period, Matrix{Float64}(compOrbit.monodromy))
+q0JumpCheck = MBD.BoundingBoxJumpCheck("Initial State", [0.9 1.3; -0.1 0; -0.5 0])
 orbit::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(targeter, compOrbit, 0.0, p, q, q0JumpCheck)
 
 propTime::Float64 = pi*2

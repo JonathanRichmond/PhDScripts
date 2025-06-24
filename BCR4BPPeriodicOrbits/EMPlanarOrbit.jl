@@ -3,7 +3,7 @@ Script for BCR4BP Earth-Moon planar orbits
 
 Author: Jonathan Richmond
 C: 4/23/25
-U: 6/23/25
+U: 6/24/25
 """
 module EMPlanar
 println()
@@ -27,12 +27,13 @@ propagator = MBD.Propagator()
 targeter = PlanarPerpP12Targeter(dynamicsModel)
 CR3BPTargeter = PlanarPerpJCTargeter(CR3BPDynamicsModel)
 
-familyFile::String = "FamilyData/CR3BPEML2Lyapunovs.csv"
-p::Int64, q::Int64 = 2, 1
+familyFile::String = "FamilyData/CR3BPEML1Lyapunovs.csv"
+p::Int64, q::Int64 = 3, 2
+numSegs::Int64 = 4*q
 compOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, familyFile, "Period", getSynodicPeriod(dynamicsModel)*q/p; choiceIndex = 1)
 println("Converged $p:$q CR3BP Orbit:\n\tIC:\t$(compOrbit.initialCondition)\n\tP:\t$(compOrbit.period)\n")
-q0JumpCheck = MBD.BoundingBoxJumpCheck("IntialState", [0.9 1.3; 0.0 0.5])
-orbit::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(targeter, compOrbit, 0.0, p, q, q0JumpCheck)
+q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.9 1.0; -1.0 0])
+orbit::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(targeter, compOrbit, numSegs, 0.0, p, q, q0JumpCheck, tol = 1E-10, refTol = 1E-10)
 (orbitSB1::Vector{Vector{Float64}}, ~) = rotating12ToRotating41(dynamicsModel, [orbit.initialCondition], [0.0])
 
 mf = MATLAB.MatFile("Output/EMPlanarOrbit.mat", "w")
