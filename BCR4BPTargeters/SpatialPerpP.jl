@@ -3,7 +3,7 @@ Period perpendicular crossing targeter for BCR4BP spatial orbits
 
 Author: Jonathan Richmond
 C: 6/11/25
-U: 6/24/25
+U: 6/25/25
 """
 
 using MBD, DifferentialEquations, Logging, StaticArrays
@@ -64,7 +64,6 @@ function correct(targeter::SpatialPerpP12Targeter, qVector::Vector{Vector{Float6
     addConstraint!(problem, MBD.BCR4BP12StateConstraint(nodes[end], [2, 4, 6], [0.0, 0.0, 0.0]))
     checkJacobian(problem; relTol = JTol)
     shooter = MBD.BCR4BP12MultipleShooter(tol)
-    shooter.maxIterations = 50
     # shooter.printProgress = true
     solution::MBD.BCR4BP12MultipleShooterProblem = MBD.solve!(shooter, problem)
 
@@ -115,6 +114,24 @@ function getMonodromy(targeter::SpatialPerpP12Targeter, solution::MBD.BCR4BP12Mu
 end
 
 """
+    getPeriod(targeter, segments)
+
+Return orbit period
+
+# Arguments
+- `targeter::SpatialPerpP12Targeter`: BCR4BP P1-P2 spatial perpendicular crossing period targeter object
+- `segments::Vector{BCR4BP12Segment}`: BCR4BP P1-P2 segment objects
+"""
+function getPeriod(targeter::SpatialPerpP12Targeter, segments::Vector{MBD.BCR4BP12Segment})
+    TOF::Float64 = 0.0
+    for s::Int64 = 1:length(segments)
+        TOF += segments[s].TOF.data[1]
+    end
+
+    return 2*TOF
+end
+
+"""
     getPeriod(targeter, solution)
 
 Return orbit period
@@ -124,12 +141,7 @@ Return orbit period
 - `solution::BCR4BP12MultipleShooterProblem`: Solved BCR4BP P1-P2 multiple shooter problem object
 """
 function getPeriod(targeter::SpatialPerpP12Targeter, solution::MBD.BCR4BP12MultipleShooterProblem)
-    TOF::Float64 = 0.0
-    for s::Int64 = 1:length(solution.segments)
-        TOF += solution.segments[s].TOF.data[1]
-    end
-
-    return 2*TOF
+    return getPeriod(targeter, solution.segments)
 end
 
 """
@@ -138,7 +150,7 @@ end
 Return synodic-resonant periodic orbit
 
 # Arguments
-- `targeter::SpatialPerpP12Targeter`: BCR4BP P1-P2 planar perpendicular crossing period targeter object
+- `targeter::SpatialPerpP12Targeter`: BCR4BP P1-P2 spatial perpendicular crossing period targeter object
 - `initialOrbit::CR3BPPeriodicOrbit`: CR3BP periodic orbit initial guess
 - `numSegs::Int64`: NUmber of segments
 - `theta40::Float64`: Initial P4 angle [ndim]
@@ -179,7 +191,7 @@ function getResonantOrbit(targeter::SpatialPerpP12Targeter, initialOrbit::MBD.CR
     # continuationEngine.printProgress = true
     solutions::MBD.BCR4BP12ContinuationFamily = doContinuation!(continuationEngine, solution0, solution1)
     (continuationEngine.dataInProgress.converging == false) && throw(ErrorException("Homotopy could not converge: Failed at $(continuationEngine.dataInProgress.previousSolution.nodes[1].dynamicsModel.systemData.P4Mass/targeter.dynamicsModel.systemData.primaryData[3].mass) with IC = $(continuationEngine.dataInProgress.previousSolution.nodes[1].state.data[1:7])"))
-    Logging.@info "Converged Last Homotopy Orbit:\n\tIC:\t$(solutions.nodes[end][1].state.data[1:7])\n\tP:\t$(2*solutions.segments[end][1].TOF.data[1])\n"
+    Logging.@info "Converged Last Homotopy Orbit:\n\tIC:\t$(solutions.nodes[end][1].state.data[1:7])\n\tP:\t$(getPeriod(targeter, solutions.segments[end]))\n"
     systemDataEnd = MBD.BCR4BPSystemData("Earth", "Moon", "Sun", "Earth_Barycenter")
     systemDataEnd.P4Mass = targeteps*targeter.dynamicsModel.systemData.P4Mass
     dynamicsModelEnd = MBD.BCR4BP12DynamicsModel(systemDataEnd)
