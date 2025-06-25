@@ -10,7 +10,7 @@ println()
 
 using MBD, Logging, MATLAB
 
-global_logger(ConsoleLogger(stderr, Logging.Debug)) # Debug, Info, Warn, Error
+global_logger(ConsoleLogger(stderr, Logging.Warn)) # Debug, Info, Warn, Error
 
 include("../BCR4BPTargeters/SpatialContP.jl")
 include("../BCR4BPTargeters/SpatialPerpP.jl")
