@@ -173,7 +173,7 @@ function getResonantOrbit(targeter::SpatialContP12Targeter, initialOrbit::MBD.CR
     targeter1 = SpatialContP12Targeter(dynamicsModel1)
     solution1::MBD.BCR4BP12MultipleShooterProblem = correct(targeter1, [solution0.nodes[n].state.data[1:7] for n = 1:numNodes], [solution0.nodes[n].epoch.data[1] for n = 1:numNodes], numNodes, tol = tol, JTol = JTol)
     Logging.@info "Converged Homotopy Orbit 1:\n\tIC:\t$(solution1.nodes[1].state.data[1:7])\n\tP:\t$(getPeriod(targeter1, solution1))\n"
-    continuationEngine = MBD.P4MassContinuationEngine(solution0, solution1, Deltaeps, 0.001, tol = tol, JTol = JTol)
+    continuationEngine = MBD.P4MassContinuationEngine(solution0, solution1, Deltaeps, 0.1, tol = tol, JTol = JTol)
     addJumpCheck!(continuationEngine, boundingBoxJumpCheck)
     homotopyEndCheck = MBD.HomotopyEndCheck(targeteps)
     addEndCheck!(continuationEngine, homotopyEndCheck)
