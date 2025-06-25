@@ -10,7 +10,7 @@ println()
 
 using MBD, Logging, MATLAB
 
-global_logger(ConsoleLogger(stderr, Logging.Warn)) # Debug, Info, Warn, Error
+global_logger(ConsoleLogger(stderr, Logging.Debug)) # Debug, Info, Warn, Error
 
 include("../BCR4BPTargeters/SpatialContP.jl")
 include("../BCR4BPTargeters/SpatialPerpP.jl")
@@ -39,7 +39,7 @@ println("Converged $p:$q CR3BP Orbit:\n\tIC:\t$(compOrbit.initialCondition)\n\tP
 # compOrbit = MBD.CR3BPPeriodicOrbit(CR3BPDynamicsModel, halfState, compOrbit.period, Matrix{Float64}(compOrbit.monodromy))
 # q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.9 1.3; -0.1 0; -0.5 0])
 q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.9 1.2; 0.01 0.1; -1.0 -0.3])
-orbit::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(contTargeter, compOrbit, numSegs, 0.0, p, q, targeteps = 0.1, q0JumpCheck, tol = 5E-10, refTol = 5E-10)
+orbit::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(contTargeter, compOrbit, numSegs, 0.0, p, q, q0JumpCheck, targeteps = 0.145, tol = 5E-10, refTol = 5E-10)
 (orbitSB1::Vector{Vector{Float64}}, ~) = rotating12ToRotating41(dynamicsModel, [orbit.initialCondition], [0.0])
 
 mf = MATLAB.MatFile("Output/EMSpatialOrbit.mat", "w")
