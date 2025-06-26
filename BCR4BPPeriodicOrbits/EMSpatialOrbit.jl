@@ -39,7 +39,7 @@ println("Converged $p:$q CR3BP Orbit:\n\tIC:\t$(compOrbit.initialCondition)\n\tP
 # compOrbit = MBD.CR3BPPeriodicOrbit(CR3BPDynamicsModel, halfState, compOrbit.period, Matrix{Float64}(compOrbit.monodromy))
 # q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.9 1.3; -0.1 0; -0.5 0])
 q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.9 1.2; 0.01 0.1; -1.0 -0.3])
-orbit::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(contTargeter, compOrbit, numSegs, 0.0, p, q, q0JumpCheck, targeteps = 0.145, tol = 5E-10, refTol = 5E-10)
+orbit::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(contTargeter, compOrbit, numSegs, 0.0, p, q, q0JumpCheck, targeteps = 0.145, tol = 1E-10, refTol = 1E-10)
 (orbitSB1::Vector{Vector{Float64}}, ~) = rotating12ToRotating41(dynamicsModel, [orbit.initialCondition], [0.0])
 
 mf = MATLAB.MatFile("Output/EMSpatialOrbit.mat", "w")
