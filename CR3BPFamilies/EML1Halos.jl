@@ -1,8 +1,9 @@
 """
-Script for Earth-Moon CR3BP L1 halo orbit family
+Script for Earth-Moon CR3BP L1 southern halo orbit family
 
 Author: Jonathan Richmond
 C: 6/11/25
+U: 6/30/25
 """
 module EML1Halo
 println()
@@ -35,8 +36,8 @@ println("Continuing orbits...")
 continuationEngine = MBD.CR3BPNaturalParameterContinuationEngine(solution1, solution2, "Initial State", 3, -1E-4, -1E-2)
 z0JumpCheck = MBD.BoundingBoxJumpCheck("Initial State", [NaN NaN; 0 0.1; NaN NaN])
 addJumpCheck!(continuationEngine, z0JumpCheck)
-ydotEndCheck = MBD.BoundingBoxContinuationEndCheck("Initial State", [NaN NaN; NaN NaN; -3.5 0])
-addEndCheck!(continuationEngine, ydotEndCheck)
+MoonEndCheck = MBD.CR3BPPrimarySurfaceContinuationEndCheck(dynamicsModel, 2)
+addEndCheck!(continuationEngine, MoonEndCheck)
 family = MBD.CR3BPOrbitFamily(dynamicsModel)
 solutions::MBD.CR3BPContinuationFamily = doContinuation!(continuationEngine, solution1, solution2)
 lastOrbit::MBD.CR3BPPeriodicOrbit = getIndividualPeriodicOrbit(targeter, solutions, getNumMembers(solutions))
@@ -68,7 +69,6 @@ eigenSort!(family)
 # GLMakie.lines!(axis, xData, yData, zData, color = :white, label = L"$L_{1}$ Halo Orbit")
 # GLMakie.scatter!(axis, LagrangePoints[1][1], LagrangePoints[1][2], LagrangePoints[1][3], color = :red, markersize = 5, label = L"$L_{1}$" => (; markersize = 20))
 # GLMakie.scatter!(axis, LagrangePoints[2][1], LagrangePoints[2][2], LagrangePoints[2][3], color = :orange, markersize = 5, label = L"$L_{2}$" => (; markersize = 20))
-# GLMakie.scatter!(axis, getPrimaryState(dynamicsModel, 1)[1], getPrimaryState(dynamicsModel, 1)[2], getPrimaryState(dynamicsModel, 1)[3], color = :blue, markerspace = :data, markersize = Earth.bodyRadius/getCharLength(systemData), label = L"\mathrm{Earth}" => (; markersize = 20))
 # GLMakie.scatter!(axis, getPrimaryState(dynamicsModel, 2)[1], getPrimaryState(dynamicsModel, 2)[2], getPrimaryState(dynamicsModel, 2)[3], color = :gray, markerspace = :data, markersize = Moon.bodyRadius/getCharLength(systemData), label = L"\mathrm{Moon}" => (; markersize = 20))
 # GLMakie.Legend(figure[1,2], axis)
 

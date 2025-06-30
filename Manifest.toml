@@ -206,39 +206,39 @@ version = "5.18.0"
 
 [[deps.BoundaryValueDiffEqAscher]]
 deps = ["ADTypes", "AlmostBlockDiagonals", "BoundaryValueDiffEqCore", "ConcreteStructs", "DiffEqBase", "DifferentiationInterface", "FastClosures", "ForwardDiff", "LinearAlgebra", "PreallocationTools", "RecursiveArrayTools", "Reexport", "SciMLBase", "Setfield"]
-git-tree-sha1 = "64a777e06d995f677c86c7ddbb85f393074a0877"
+git-tree-sha1 = "47c833c459738a3f27c5b458ecf7832a4731ef4d"
 uuid = "7227322d-7511-4e07-9247-ad6ff830280e"
-version = "1.7.0"
+version = "1.8.0"
 
 [[deps.BoundaryValueDiffEqCore]]
 deps = ["ADTypes", "Adapt", "ArrayInterface", "ConcreteStructs", "DiffEqBase", "ForwardDiff", "LineSearch", "LinearAlgebra", "Logging", "NonlinearSolveFirstOrder", "PreallocationTools", "RecursiveArrayTools", "Reexport", "SciMLBase", "Setfield", "SparseArrays", "SparseConnectivityTracer", "SparseMatrixColorings"]
-git-tree-sha1 = "c83bf97da90dd379b1e3f4d9c6f3d0ae48eb0b29"
+git-tree-sha1 = "9b302ba0af3e17e8d468ae95af13415016be8ab0"
 uuid = "56b672f2-a5fe-4263-ab2d-da677488eb3a"
-version = "1.10.0"
+version = "1.11.0"
 
 [[deps.BoundaryValueDiffEqFIRK]]
 deps = ["ADTypes", "ArrayInterface", "BandedMatrices", "BoundaryValueDiffEqCore", "ConcreteStructs", "DiffEqBase", "DifferentiationInterface", "FastAlmostBandedMatrices", "FastClosures", "ForwardDiff", "LinearAlgebra", "PreallocationTools", "PrecompileTools", "Preferences", "RecursiveArrayTools", "Reexport", "SciMLBase", "Setfield", "SparseArrays"]
-git-tree-sha1 = "e58ee9acfc6dce6dcc368fc0483952bec5625513"
+git-tree-sha1 = "325e6981a414cfa5181218936c23f0e16dee8f08"
 uuid = "85d9eb09-370e-4000-bb32-543851f73618"
-version = "1.8.1"
+version = "1.9.0"
 
 [[deps.BoundaryValueDiffEqMIRK]]
 deps = ["ADTypes", "ArrayInterface", "BandedMatrices", "BoundaryValueDiffEqCore", "ConcreteStructs", "DiffEqBase", "DifferentiationInterface", "FastAlmostBandedMatrices", "FastClosures", "ForwardDiff", "LinearAlgebra", "PreallocationTools", "PrecompileTools", "Preferences", "RecursiveArrayTools", "Reexport", "SciMLBase", "Setfield", "SparseArrays"]
-git-tree-sha1 = "43debeee94167e2dc744f4a385213c4f0d16b4c3"
+git-tree-sha1 = "da6ae5e564ad06ced4d7504929c58130558007dd"
 uuid = "1a22d4ce-7765-49ea-b6f2-13c8438986a6"
-version = "1.8.1"
+version = "1.9.0"
 
 [[deps.BoundaryValueDiffEqMIRKN]]
 deps = ["ADTypes", "ArrayInterface", "BandedMatrices", "BoundaryValueDiffEqCore", "ConcreteStructs", "DiffEqBase", "DifferentiationInterface", "FastAlmostBandedMatrices", "FastClosures", "ForwardDiff", "LinearAlgebra", "PreallocationTools", "PrecompileTools", "Preferences", "RecursiveArrayTools", "Reexport", "SciMLBase", "Setfield", "SparseArrays"]
-git-tree-sha1 = "1d92c9f7567b627514e143a3caf93af6d235c2db"
+git-tree-sha1 = "609c2d03ea024df0d475fee483b93cf0e87c29d6"
 uuid = "9255f1d6-53bf-473e-b6bd-23f1ff009da4"
-version = "1.7.1"
+version = "1.8.0"
 
 [[deps.BoundaryValueDiffEqShooting]]
 deps = ["ADTypes", "ArrayInterface", "BandedMatrices", "BoundaryValueDiffEqCore", "ConcreteStructs", "DiffEqBase", "DifferentiationInterface", "FastAlmostBandedMatrices", "FastClosures", "ForwardDiff", "LinearAlgebra", "PreallocationTools", "PrecompileTools", "Preferences", "RecursiveArrayTools", "Reexport", "SciMLBase", "Setfield", "SparseArrays"]
-git-tree-sha1 = "1460c449c91c9bc4c8fb08fb5e878811ab38d667"
+git-tree-sha1 = "ba9bd1f31b58bfd5e48a56da0a426bcbd3462546"
 uuid = "ed55bfe0-3725-4db6-871e-a1dc9f42a757"
-version = "1.8.1"
+version = "1.9.0"
 
 [[deps.BracketingNonlinearSolve]]
 deps = ["CommonSolve", "ConcreteStructs", "NonlinearSolveBase", "PrecompileTools", "Reexport", "SciMLBase"]
@@ -935,9 +935,9 @@ version = "3.4.0+2"
 
 [[deps.GLMakie]]
 deps = ["ColorTypes", "Colors", "FileIO", "FixedPointNumbers", "FreeTypeAbstraction", "GLFW", "GeometryBasics", "LinearAlgebra", "Makie", "Markdown", "MeshIO", "ModernGL", "Observables", "PrecompileTools", "Printf", "ShaderAbstractions", "StaticArrays"]
-git-tree-sha1 = "a2c27fa9c6b527f5acc0ab8cfa4a84becdfbf6d1"
+git-tree-sha1 = "8a1fa9bc8a6df03d4fc2574c460acbcb491093d7"
 uuid = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
-version = "0.13.1"
+version = "0.13.2"
 
 [[deps.GPUArraysCore]]
 deps = ["Adapt"]
@@ -1459,7 +1459,7 @@ version = "0.9.0"
 
 [[deps.MBD]]
 deps = ["CSV", "Combinatorics", "DataFrames", "DifferentialEquations", "LightXML", "LinearAlgebra", "Logging", "SPICE", "StaticArrays", "UpdateJulia"]
-git-tree-sha1 = "0199d7d1af721d3ca3a05b946356478c0d2615ab"
+git-tree-sha1 = "8f09d051acddb2a35927ef8f4e4b00f6b2585b74"
 repo-rev = "richmo11-memoryChanges"
 repo-url = "https://github.com/JonathanRichmond/MBD.jl.git"
 uuid = "994ce0ec-d6e5-428b-b4b3-7b10f5a0848a"
@@ -1478,9 +1478,9 @@ version = "0.5.16"
 
 [[deps.Makie]]
 deps = ["Animations", "Base64", "CRC32c", "ColorBrewer", "ColorSchemes", "ColorTypes", "Colors", "ComputePipeline", "Contour", "Dates", "DelaunayTriangulation", "Distributions", "DocStringExtensions", "Downloads", "FFMPEG_jll", "FileIO", "FilePaths", "FixedPointNumbers", "Format", "FreeType", "FreeTypeAbstraction", "GeometryBasics", "GridLayoutBase", "ImageBase", "ImageIO", "InteractiveUtils", "Interpolations", "IntervalSets", "InverseFunctions", "Isoband", "KernelDensity", "LaTeXStrings", "LinearAlgebra", "MacroTools", "Markdown", "MathTeXEngine", "Observables", "OffsetArrays", "PNGFiles", "Packing", "Pkg", "PlotUtils", "PolygonOps", "PrecompileTools", "Printf", "REPL", "Random", "RelocatableFolders", "Scratch", "ShaderAbstractions", "Showoff", "SignedDistanceFields", "SparseArrays", "Statistics", "StatsBase", "StatsFuns", "StructArrays", "TriplotBase", "UnicodeFun", "Unitful"]
-git-tree-sha1 = "384c62d448522f818e7b745ffd87a33027f7e85b"
+git-tree-sha1 = "2928d52e1737965fd63c23fdef49cb51577068c4"
 uuid = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
-version = "0.24.1"
+version = "0.24.2"
 
 [[deps.ManualMemory]]
 git-tree-sha1 = "bcaef4fc7a0cfe2cba636d84cda54b5e4e4ca3cd"
@@ -1786,9 +1786,9 @@ weakdeps = ["EnzymeCore"]
 
 [[deps.OrdinaryDiffEqDefault]]
 deps = ["ADTypes", "DiffEqBase", "EnumX", "LinearAlgebra", "LinearSolve", "OrdinaryDiffEqBDF", "OrdinaryDiffEqCore", "OrdinaryDiffEqRosenbrock", "OrdinaryDiffEqTsit5", "OrdinaryDiffEqVerner", "PrecompileTools", "Preferences", "Reexport"]
-git-tree-sha1 = "8eeed32442874d1bdcc2192a874a73f1a9a07e31"
+git-tree-sha1 = "7e2f4ec76ebac709401064fd2cf73ad993d1e694"
 uuid = "50262376-6c5a-4cf5-baba-aaf4f84d72d7"
-version = "1.4.0"
+version = "1.5.0"
 
 [[deps.OrdinaryDiffEqDifferentiation]]
 deps = ["ADTypes", "ArrayInterface", "ConcreteStructs", "ConstructionBase", "DiffEqBase", "DifferentiationInterface", "FastBroadcast", "FiniteDiff", "ForwardDiff", "FunctionWrappersWrappers", "LinearAlgebra", "LinearSolve", "OrdinaryDiffEqCore", "SciMLBase", "SciMLOperators", "SparseArrays", "SparseMatrixColorings", "StaticArrayInterface", "StaticArrays"]
@@ -2385,9 +2385,9 @@ version = "1.1.0"
 
 [[deps.Sixel]]
 deps = ["Dates", "FileIO", "ImageCore", "IndirectArrays", "OffsetArrays", "REPL", "libsixel_jll"]
-git-tree-sha1 = "a8dd0ed8a9e277013fdd4da1a413c748b349b7ec"
+git-tree-sha1 = "0494aed9501e7fb65daba895fb7fd57cc38bc743"
 uuid = "45858cf5-a6b0-47a3-bbea-62219f50df47"
-version = "0.1.4"
+version = "0.1.5"
 
 [[deps.Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
@@ -2728,12 +2728,6 @@ git-tree-sha1 = "53ab3e9c94f4343c68d5905565be63002e13ec8c"
 uuid = "a2964d1f-97da-50d4-b82a-358c7fce9d89"
 version = "1.23.1+1"
 
-[[deps.Wayland_protocols_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "54b8a029ac145ebe8299463447fd1590b2b1d92f"
-uuid = "2381bf8a-dfd0-557d-9999-79630e7b1b91"
-version = "1.44.0+0"
-
 [[deps.WeakRefStrings]]
 deps = ["DataAPI", "InlineStrings", "Parsers"]
 git-tree-sha1 = "b1be2855ed9ed8eac54e5caff2afcdb442d52c23"
@@ -2958,7 +2952,7 @@ uuid = "dfaa095f-4041-5dcd-9319-2fabd8486b76"
 version = "3.6.0+0"
 
 [[deps.xkbcommon_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Wayland_jll", "Wayland_protocols_jll", "Xorg_libxcb_jll", "Xorg_xkeyboard_config_jll"]
-git-tree-sha1 = "c950ae0a3577aec97bfccf3381f66666bc416729"
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libxcb_jll", "Xorg_xkeyboard_config_jll"]
+git-tree-sha1 = "fbf139bce07a534df0e699dbb5f5cc9346f95cc1"
 uuid = "d8fb68d0-12a3-5cfd-a85a-d49703b185fd"
-version = "1.8.1+0"
+version = "1.9.2+0"

@@ -1,28 +1,27 @@
 """
-Initial y-velocity perpendicular crossing targeter for CR3BP spatial orbits
+Period perpendicular crossing targeter for CR3BP planar orbits
 
 Author: Jonathan Richmond
-C: 6/11/25
-U: 6/30/25
+C: 6/30/25
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, StaticArrays
 
-export SpatialPerpVyTargeter
+export PlanarPerpPTargeter
 export correct, getIndividualPeriodicOrbit, getMonodromy, getPeriod, interpOrbit, propagateState
 
 """
-    SpatialPerpVyTargeter(dynamicsModel)
+    PlanarPerpPTargeter(dynamicsModel)
 
-CR3BP spatial perpendicular crossing y-velocity targeter object
+CR3BP planar perpendicular crossing period targeter object
 
 # Arguments
 - `dynamicsModel::CR3BPDynamicsModel`: CR3BP dynamics model object
 """
-struct SpatialPerpVyTargeter
+struct PlanarPerpPTargeter
     dynamicsModel::MBD.CR3BPDynamicsModel                               # CR3BP dynamics model object
 
-    function SpatialPerpVyTargeter(dynamicsModel::MBD.CR3BPDynamicsModel)
+    function PlanarPerpPTargeter(dynamicsModel::MBD.CR3BPDynamicsModel)
         this = new(dynamicsModel)
 
         return this
@@ -30,34 +29,35 @@ struct SpatialPerpVyTargeter
 end
 
 """
-    correct(targeter, q0, tSpan, targetydot0; tol, JTol)
+    correct(targeter, q0, tSpan, targetP; tol, JTol)
 
 Return corrected CR3BP multiple shooter problem object
 
 # Arguments
-- `targeter::SpatialPerpVyTargeter`: CR3BP spatial perpendicular crossing initial y-velocity targeter object
+- `targeter::PlanarPerpPTargeter`: CR3BP planar perpendicular crossing period targeter object
 - `q0::Vector{Float64}`: Initial state guess [ndim]
 - `tSpan::Vector{Float64}`: Time span guess [ndim]
-- `targetydot0::Float64`: Target initial y-velocity
+- `targetP::Float64`: Target period [ndim]
 - `tol::Float64`: Convergence tolerance (default = 1E-11)
 - `JTol::Float64`: Jacobian accuracy tolerance (default = 2E-3)
 """
-function correct(targeter::SpatialPerpVyTargeter, q0::Vector{Float64}, tSpan::Vector{Float64}, targetydot0::Float64; tol::Float64 = 1E-11, JTol::Float64 = 2E-3)
+function correct(targeter::PlanarPerpPTargeter, q0::Vector{Float64}, tSpan::Vector{Float64}, targetP::Float64; tol::Float64 = 1E-11, JTol::Float64 = 2E-3)
     halfPeriodGuess::Float64 = (tSpan[2]-tSpan[1])/2
     tPCGuess::Float64 = tSpan[1]+halfPeriodGuess
     qPCGuess::Vector{Float64} = propagateState(targeter, q0, [tSpan[1], tPCGuess])
     originNode = MBD.CR3BPNode(tSpan[1], q0, targeter.dynamicsModel)
     originNode.state.name = "Initial State"
-    setFreeVariableMask!(originNode.state, [true, false, true, false, true, false])
+    setFreeVariableMask!(originNode.state, [true, false, false, false, true, false])
     terminalNode = MBD.CR3BPNode(tPCGuess, qPCGuess, targeter.dynamicsModel)
     terminalNode.state.name = "Target State"
     segment = MBD.CR3BPSegment(halfPeriodGuess, originNode, terminalNode)
+    segment.TOF.name = "Half Period"
     problem = MBD.CR3BPMultipleShooterProblem()
     addSegment!(problem, segment)
     addConstraint!(problem, MBD.CR3BPContinuityConstraint(segment))
-    addConstraint!(problem, MBD.CR3BPStateConstraint(originNode, [5], [targetydot0]))
-    addConstraint!(problem, MBD.CR3BPStateConstraint(terminalNode, [2, 4, 6], [0.0, 0.0, 0.0]))
-    checkJacobian(problem, relTol = JTol)
+    addConstraint!(problem, MBD.CR3BPTimeConstraint(segment, targetP/2))
+    addConstraint!(problem, MBD.CR3BPStateConstraint(terminalNode, [2, 4], [0.0, 0.0]))
+    checkJacobian(problem; relTol = JTol)
     shooter = MBD.CR3BPMultipleShooter(tol)
     # shooter.printProgress = true
     solution::MBD.CR3BPMultipleShooterProblem = MBD.solve!(shooter, problem)
@@ -72,11 +72,11 @@ end
 Return periodic orbit object
 
 # Arguments
-- `targeter::SpatialPerpVyTargeter`: CR3BP spatial perpendicular crossing initial y-velocity targeter object
+- `targeter::PlanarPerpPTargeter`: CR3BP planar perpendicular crossing period targeter object
 - `family::CR3BPContinuationFamily`: CR3BP continuation family object
 - `orbit::Int64`: Orbit identifier
 """
-function getIndividualPeriodicOrbit(targeter::SpatialPerpVyTargeter, family::MBD.CR3BPContinuationFamily, orbit::Int64)
+function getIndividualPeriodicOrbit(targeter::PlanarPerpPTargeter, family::MBD.CR3BPContinuationFamily, orbit::Int64)
     period::Float64 = 2*family.segments[orbit][1].TOF.data[1]
     propagator = MBD.Propagator(equationType = MBD.STM)
     nStates::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
@@ -98,10 +98,10 @@ end
 Return orbit monodromy matrix
 
 # Arguments
-- `targeter::SpatialPerpVyTargeter`: CR3BP spatial perpendicular crossing initial y-velocity targeter object
+- `targeter::PlanarPerpPTargeter`: CR3BP planar perpendicular crossing period targeter object
 - `solution::CR3BPMultipleShooterProblem`: Solved CR3BP multiple shooter problem object
 """
-function getMonodromy(targeter::SpatialPerpVyTargeter, solution::MBD.CR3BPMultipleShooterProblem)
+function getMonodromy(targeter::PlanarPerpPTargeter, solution::MBD.CR3BPMultipleShooterProblem)
     propagator = MBD.Propagator(equationType = MBD.STM)
     n_simple::Int64 = getStateSize(targeter.dynamicsModel, MBD.SIMPLE)
     n_STM::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
@@ -127,10 +127,10 @@ end
 Return orbit period
 
 # Arguments
-- `targeter::SpatialPerpVyTargeter`: CR3BP spatial perpendicular crossing initial y-velocity targeter object
+- `targeter::PlanarPerpPTargeter`: CR3BP planar perpendicular crossing period targeter object
 - `solution::CR3BPMultipleShooterProblem`: Solved CR3BP multiple shooter problem object
 """
-function getPeriod(targeter::SpatialPerpVyTargeter, solution::MBD.CR3BPMultipleShooterProblem)
+function getPeriod(targeter::PlanarPerpPTargeter, solution::MBD.CR3BPMultipleShooterProblem)
     return 2*solution.segments[1].TOF.data[1]
 end
 
@@ -140,7 +140,7 @@ end
 Return interpolated periodic orbit object via bisection
 
 # Arguments
-- `targeter::SpatialPerpVyTargeter`: CR3BP spatial perpendicular crossing initial y-velocity targeter object
+- `targeter::PlanarPerpPTargeter`: CR3BP planar perpendicular crossing period targeter object
 - `fileName::String`: Family data CSV file
 - `paramName::String`: Desired parameter name
 - `paramValue::Float64`: Desired parameter value
@@ -149,7 +149,7 @@ Return interpolated periodic orbit object via bisection
 - `tol::Float64`: Convergence tolerance (default = 1E-11)
 - `JTol::Float64`: Jacobian accuracy tolerance (default = 2E-3)
 """
-function interpOrbit(targeter::SpatialPerpVyTargeter, fileName::String, paramName::String, paramValue::Float64; choiceIndex::Int64 = 1, printProgress::Bool = false, tol::Float64 = 1E-11, JTol::Float64 = 2E-3)
+function interpOrbit(targeter::PlanarPerpPTargeter, fileName::String, paramName::String, paramValue::Float64; choiceIndex::Int64 = 1, printProgress::Bool = false, tol::Float64 = 1E-11, JTol::Float64 = 2E-3)
     familyData::DataFrames.DataFrame = DataFrames.DataFrame(CSV.File(fileName))
     nMem::Int16 = Int16(size(familyData, 1))
     !any(occursin.(paramName, names(familyData))) && throw(ErrorException("Parameter not supported"))
@@ -206,7 +206,7 @@ function interpOrbit(targeter::SpatialPerpVyTargeter, fileName::String, paramNam
         currentError::Float64 = abs(lowerData[paramName]-paramValue)
         iter::Int16 = Int16(1)
         while (currentError > 1E-8) && (iter <= 20)
-            midSolution::MBD.CR3BPMultipleShooterProblem = correct(targeter, midInitialCondition, [0, midPeriod], midInitialCondition[5]; tol, JTol)
+            midSolution::MBD.CR3BPMultipleShooterProblem = correct(targeter, midInitialCondition, [0, midPeriod], midJC; tol, JTol)
             newInitialCondition::Vector{Float64} = midSolution.nodes[1].state.data[1:6]
             newPeriod::Float64 = getPeriod(targeter, midSolution)
             newMonodromy::Matrix{Float64} = getMonodromy(targeter, midSolution)
@@ -241,11 +241,11 @@ end
 Return propagated state
 
 # Arguments
-- `targeter::SpatialPerpVyTargeter`: CR3BP spatial perpendicular crossing initial y-velocity targeter object
+- `targeter::PlanarPerpPTargeter`: CR3BP planar perpendicular crossing period targeter object
 - `q_simple::Vector{Float64}`: Simple state vector [ndim]
 - `tSpan::Vector{Float64}`: Time span [ndim]
 """
-function propagateState(targeter::SpatialPerpVyTargeter, q_simple::Vector{Float64}, tSpan::Vector{Float64})
+function propagateState(targeter::PlanarPerpPTargeter, q_simple::Vector{Float64}, tSpan::Vector{Float64})
     propagator = MBD.Propagator()
     arc::MBD.CR3BPArc = propagate(propagator, q_simple, tSpan, targeter.dynamicsModel)
 
