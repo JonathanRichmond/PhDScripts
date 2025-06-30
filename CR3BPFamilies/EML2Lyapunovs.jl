@@ -3,12 +3,14 @@ Script for Earth-Moon CR3BP L2 Lyapunov orbit family
 
 Author: Jonathan Richmond
 C: 6/6/25
-U: 6/18/25
+U: 6/30/25
 """
 module EML2Lyap
 println()
 
-using MBD, GLMakie
+using MBD, GLMakie, Logging
+
+global_logger(ConsoleLogger(stderr, Logging.Warn)) # Debug, Info, Warn, Error
 
 include("../CR3BPTargeters/PlanarPerpJC.jl")
 include("../Utilities/Export.jl")
@@ -34,7 +36,7 @@ println("Continuing orbits...")
 continuationEngine = MBD.JacobiConstantContinuationEngine(solution1, solution2, -1E-4, -1E-2)
 ydot0JumpCheck = MBD.BoundingBoxJumpCheck("Initial State", [NaN NaN; 0 2.5])
 addJumpCheck!(continuationEngine, ydot0JumpCheck)
-MoonEndCheck = MBD.BoundingBoxContinuationEndCheck("Initial State", [getPrimaryState(dynamicsModel, 2)[1]+Moon.bodyRadius/getCharLength(systemData) LagrangePoints[2][1]; NaN NaN])
+MoonEndCheck = MBD.CR3BPPrimarySurfaceContinuationEndCheck(dynamicsModel, 2)
 addEndCheck!(continuationEngine, MoonEndCheck)
 family = MBD.CR3BPOrbitFamily(dynamicsModel)
 solutions::MBD.CR3BPContinuationFamily = doContinuation!(continuationEngine, solution1, solution2)

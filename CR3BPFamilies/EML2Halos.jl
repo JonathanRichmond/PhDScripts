@@ -1,8 +1,9 @@
 """
-Script for Earth-Moon CR3BP L2 halo orbit family
+Script for Earth-Moon CR3BP L2 southern halo orbit family
 
 Author: Jonathan Richmond
 C: 6/12/25
+U: 6/30/25
 """
 module EML2Halo
 println()
@@ -35,8 +36,8 @@ println("Continuing orbits...")
 continuationEngine = MBD.CR3BPNaturalParameterContinuationEngine(solution1, solution2, "Initial State", 3, 1E-4, 1E-2)
 z0JumpCheck = MBD.BoundingBoxJumpCheck("Initial State", [NaN NaN; 0 0.1; NaN NaN])
 addJumpCheck!(continuationEngine, z0JumpCheck)
-ydotEndCheck = MBD.BoundingBoxContinuationEndCheck("Initial State", [NaN NaN; NaN NaN; 0 2.2])
-addEndCheck!(continuationEngine, ydotEndCheck)
+MoonEndCheck = MBD.CR3BPPrimarySurfaceContinuationEndCheck(dynamicsModel, 2)
+addEndCheck!(continuationEngine, MoonEndCheck)
 family = MBD.CR3BPOrbitFamily(dynamicsModel)
 solutions::MBD.CR3BPContinuationFamily = doContinuation!(continuationEngine, solution1, solution2)
 lastOrbit::MBD.CR3BPPeriodicOrbit = getIndividualPeriodicOrbit(targeter, solutions, getNumMembers(solutions))

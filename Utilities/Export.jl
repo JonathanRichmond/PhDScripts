@@ -3,14 +3,14 @@ Export utility functions
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 6/24/25
+U: 6/30/25
 """
 
 using MBD, CSV, DataFrames, LinearAlgebra, MATLAB
 
 export CSVExportCR3BPFamily, exportBCR4BP12Manifold, exportBCR4BP12Orbit, exportBCR4BP12Trajectory
 export exportBCR4BP41Trajectory, exportCR3BPManifold, exportCR3BPOrbit, exportCR3BPTrajectory
-export exportPseudoManifold, fullExportCR3BPFamily, MATExportCR3BPFamily
+export exportInertialTrajectory, exportPseudoManifold, fullExportCR3BPFamily, MATExportCR3BPFamily
 
 """
     BCR4BP12Orb(x, y, z, xdot, ydot, zdot, theta4, t, H, P, varsig)
@@ -227,6 +227,36 @@ struct CR3BPMan
 
     function CR3BPMan(orbit::CR3BPOrb, arcs::Vector{CR3BPTraj}, TOF::Float64)
         this = new(arcs, length(arcs), orbit, TOF)
+
+        return this
+    end
+end
+
+"""
+    InertialTraj(x, y, z, xdot, ydot, zdot, t)
+
+Inertial trajectory export object
+
+# Arguments
+- `x::Vector{Float64}`: x data [ndim]
+- `y::Vector{Float64}`: y data [ndim]
+- `z::Vector{Float64}`: z data [ndim]
+- `xdot::Vector{Float64}`: xdot data [ndim]
+- `ydot::Vector{Float64}`: ydot data [ndim]
+- `zdot::Vector{Float64}`: zdot data [ndim]
+- `t::Vector{Float64}`: Time data [ndim]
+"""
+struct InertialTraj
+    t::Vector{Float64}                                                  # Time data [ndim]
+    x::Vector{Float64}                                                  # x data [ndim]
+    xdot::Vector{Float64}                                               # xdot data [ndim]
+    y::Vector{Float64}                                                  # y data [ndim]
+    ydot::Vector{Float64}                                               # ydot data [ndim]
+    z::Vector{Float64}                                                  # z data [ndim]
+    zdot::Vector{Float64}                                               # zdot data [ndim]
+
+    function InertialTraj(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, t::Vector{Float64})
+        this = new(t, x, xdot, y, ydot, z, zdot)
 
         return this
     end
@@ -879,6 +909,58 @@ Export CR3BP trajectory data to MAT file
 """
 function exportCR3BPTrajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, t::Vector{Float64}, JC::Float64, file::MATLAB.MatFile, name::Symbol)
     traj = CR3BPTraj(x, y, z, xdot, ydot, zdot, t, JC)
+    MATLAB.put_variable(file, name, traj)
+end
+
+"""
+    exportInertalTrajectory(states, times, file, name)
+
+Export inertial trajectory data to MAT file
+
+# Arguments
+- `states::Vector{Vector{Float64}}`: States [ndim]
+- `times::Vector{Float64}`: Times [ndim]
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportInertialTrajectory(states::Vector{Vector{Float64}}, times::Vector{Float64}, file::MATLAB.MatFile, name::Symbol)
+    nStates::Int64 = length(times)
+    x::Vector{Float64} = zeros(Float64, nStates)
+    y::Vector{Float64} = zeros(Float64, nStates)
+    z::Vector{Float64} = zeros(Float64, nStates)
+    xdot::Vector{Float64} = zeros(Float64, nStates)
+    ydot::Vector{Float64} = zeros(Float64, nStates)
+    zdot::Vector{Float64} = zeros(Float64, nStates)
+    for s::Int64 in 1:nStates
+        state::Vector{Float64} = states[s]
+        x[s] = state[1]
+        y[s] = state[2]
+        z[s] = state[3]
+        xdot[s] = state[4]
+        ydot[s] = state[5]
+        zdot[s] = state[6]
+    end
+    exportInertialTrajectory(x, y, z, xdot, ydot, zdot, times, file, name)
+end
+
+"""
+    exportInertialTrajectory(x, y, z, xdot, ydot, zdot, t, file, name)
+
+Export inertial trajectory data to MAT file
+
+# Arguments
+- `x::Vector{Float64}`: x data [ndim]
+- `y::Vector{Float64}`: y data [ndim]
+- `z::Vector{Float64}`: z data [ndim]
+- `xdot::Vector{Float64}`: xdot data [ndim]
+- `ydot::Vector{Float64}`: ydot data [ndim]
+- `zdot::Vector{Float64}`: zdot data [ndim]
+- `t::Vector{Float64}`: Time data [ndim]
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportInertialTrajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, t::Vector{Float64}, file::MATLAB.MatFile, name::Symbol)
+    traj = InertialTraj(x, y, z, xdot, ydot, zdot, t)
     MATLAB.put_variable(file, name, traj)
 end
 

@@ -3,6 +3,7 @@ Initial y-velocity perpendicular crossing targeter for CR3BP spatial orbits
 
 Author: Jonathan Richmond
 C: 6/11/25
+U: 6/30/25
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, StaticArrays
@@ -29,7 +30,7 @@ struct SpatialPerpVyTargeter
 end
 
 """
-    correct(targeter, q0, tSpan, targetydot0; tol)
+    correct(targeter, q0, tSpan, targetydot0; tol, JTol)
 
 Return corrected CR3BP multiple shooter problem object
 
@@ -39,8 +40,9 @@ Return corrected CR3BP multiple shooter problem object
 - `tSpan::Vector{Float64}`: Time span guess [ndim]
 - `targetydot0::Float64`: Target initial y-velocity
 - `tol::Float64`: Convergence tolerance (default = 1E-11)
+- `JTol::Float64`: Jacobian accuracy tolerance (default = 2E-3)
 """
-function correct(targeter::SpatialPerpVyTargeter, q0::Vector{Float64}, tSpan::Vector{Float64}, targetydot0::Float64, tol::Float64 = 1E-11)
+function correct(targeter::SpatialPerpVyTargeter, q0::Vector{Float64}, tSpan::Vector{Float64}, targetydot0::Float64; tol::Float64 = 1E-11, JTol::Float64 = 2E-3)
     halfPeriodGuess::Float64 = (tSpan[2]-tSpan[1])/2
     tPCGuess::Float64 = tSpan[1]+halfPeriodGuess
     qPCGuess::Vector{Float64} = propagateState(targeter, q0, [tSpan[1], tPCGuess])
@@ -55,10 +57,11 @@ function correct(targeter::SpatialPerpVyTargeter, q0::Vector{Float64}, tSpan::Ve
     addConstraint!(problem, MBD.CR3BPContinuityConstraint(segment))
     addConstraint!(problem, MBD.CR3BPStateConstraint(originNode, [5], [targetydot0]))
     addConstraint!(problem, MBD.CR3BPStateConstraint(terminalNode, [2, 4, 6], [0.0, 0.0, 0.0]))
-    checkJacobian(problem)
+    checkJacobian(problem, relTol = JTol)
     shooter = MBD.CR3BPMultipleShooter(tol)
     # shooter.printProgress = true
     solution::MBD.CR3BPMultipleShooterProblem = MBD.solve!(shooter, problem)
+    updateTerminalNodeEpoch!(segment)
 
     return solution
 end
@@ -132,7 +135,7 @@ function getPeriod(targeter::SpatialPerpVyTargeter, solution::MBD.CR3BPMultipleS
 end
 
 """
-    interpOrbit(targeter, fileName, paramName, paramValue; choiceIndex, printProgress, tol)
+    interpOrbit(targeter, fileName, paramName, paramValue; choiceIndex, printProgress, tol, JTol)
 
 Return interpolated periodic orbit object via bisection
 
@@ -144,8 +147,9 @@ Return interpolated periodic orbit object via bisection
 - `choiceIndex::Int64`: Desired orbit option index (default = 1)
 - `printProgress::Bool`: Print progress? (default = false)
 - `tol::Float64`: Convergence tolerance (default = 1E-11)
+- `JTol::Float64`: Jacobian accuracy tolerance (default = 2E-3)
 """
-function interpOrbit(targeter::SpatialPerpVyTargeter, fileName::String, paramName::String, paramValue::Float64; choiceIndex::Int64 = 1, printProgress::Bool = false, tol::Float64 = 1E-11)
+function interpOrbit(targeter::SpatialPerpVyTargeter, fileName::String, paramName::String, paramValue::Float64; choiceIndex::Int64 = 1, printProgress::Bool = false, tol::Float64 = 1E-11, JTol::Float64 = 2E-3)
     familyData::DataFrames.DataFrame = DataFrames.DataFrame(CSV.File(fileName))
     nMem::Int16 = Int16(size(familyData, 1))
     !any(occursin.(paramName, names(familyData))) && throw(ErrorException("Parameter not supported"))
@@ -202,7 +206,7 @@ function interpOrbit(targeter::SpatialPerpVyTargeter, fileName::String, paramNam
         currentError::Float64 = abs(lowerData[paramName]-paramValue)
         iter::Int16 = Int16(1)
         while (currentError > 1E-8) && (iter <= 20)
-            midSolution::MBD.CR3BPMultipleShooterProblem = correct(targeter, midInitialCondition, [0, midPeriod], midInitialCondition[5], tol)
+            midSolution::MBD.CR3BPMultipleShooterProblem = correct(targeter, midInitialCondition, [0, midPeriod], midInitialCondition[5]; tol, JTol)
             newInitialCondition::Vector{Float64} = midSolution.nodes[1].state.data[1:6]
             newPeriod::Float64 = getPeriod(targeter, midSolution)
             newMonodromy::Matrix{Float64} = getMonodromy(targeter, midSolution)

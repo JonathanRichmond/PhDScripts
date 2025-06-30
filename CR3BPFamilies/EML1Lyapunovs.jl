@@ -3,14 +3,14 @@ Script for Earth-Moon CR3BP L1 Lyapunov orbit family
 
 Author: Jonathan Richmond
 C: 2/4/25
-U: 6/18/25
+U: 6/30/25
 """
 module EML1Lyap
 println()
 
 using MBD, GLMakie, Logging
 
-global_logger(ConsoleLogger(stderr, Logging.Debug)) # Debug, Info, Warn, Error
+global_logger(ConsoleLogger(stderr, Logging.Warn)) # Debug, Info, Warn, Error
 
 include("../CR3BPTargeters/PlanarPerpJC.jl")
 include("../Utilities/Export.jl")
@@ -34,13 +34,10 @@ println("Converged Orbit 2:\n\tIC:\t$(solution2.nodes[1].state.data[1:6])\n\tP:\
 
 println("Continuing orbits...")
 continuationEngine = MBD.JacobiConstantContinuationEngine(solution1, solution2, -1E-4, -1E-2)
-continuationEngine.printProgress = true
 ydot0JumpCheck = MBD.BoundingBoxJumpCheck("Initial State", [NaN NaN; -2.5 0])
 addJumpCheck!(continuationEngine, ydot0JumpCheck)
-MoonEndCheck = MBD.BoundingBoxContinuationEndCheck("Initial State", [LagrangePoints[1][1] getPrimaryState(dynamicsModel, 2)[1]-Moon.bodyRadius/getCharLength(systemData); NaN NaN])
+MoonEndCheck = MBD.CR3BPPrimarySurfaceContinuationEndCheck(dynamicsModel, 2)
 addEndCheck!(continuationEngine, MoonEndCheck)
-numStepsEndCheck = MBD.NumberStepsContinuationEndCheck(5)
-addEndCheck!(continuationEngine, numStepsEndCheck)
 family = MBD.CR3BPOrbitFamily(dynamicsModel)
 solutions::MBD.CR3BPContinuationFamily = doContinuation!(continuationEngine, solution1, solution2)
 lastOrbit::MBD.CR3BPPeriodicOrbit = getIndividualPeriodicOrbit(targeter, solutions, getNumMembers(solutions))
