@@ -3,6 +3,7 @@ Script for computing orbit metrics
 
 Author: Jonathan Richmond
 C: 6/30/25
+U: 7/1/25
 """
 module OrbMetrics
 println()
@@ -16,12 +17,15 @@ include("../../Utilities/Export.jl")
 
 systemData = MBD.CR3BPSystemData("Earth", "Moon")
 dynamicsModel = MBD.CR3BPDynamicsModel(systemData)
+BCR4BPSystemData = MBD.BCR4BPSystemData("Earth", "Moon", "Sun", "Earth_Barycenter")
+BCR4BPDynamicsModel = MBD.BCR4BP12DynamicsModel(BCR4BPSystemData)
 
 propagator = MBD.Propagator()
-targeter = PlanarPerpPTargeter(dynamicsModel)
-familyFile::String = "FamilyData/CR3BPEMCyclers.csv"
+targeter = SpatialPerpVyTargeter(dynamicsModel)
+familyFile::String = "FamilyData/CR3BPEMResonant3_2ProsSpatial.csv"
 
-values::Vector{Float64} = [5.0, 7.25, 9.5]
+targetP::Float64 = getSynodicPeriod(BCR4BPDynamicsModel)
+values::Vector{Float64} = [targetP*3/2, targetP*5/3]
 orbits::Vector{MBD.CR3BPPeriodicOrbit} = []
 
 mf = MATLAB.MatFile("RA/Katalyst/OrbitMetrics.mat", "w")

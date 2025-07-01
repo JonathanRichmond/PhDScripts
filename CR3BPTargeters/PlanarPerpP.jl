@@ -206,7 +206,7 @@ function interpOrbit(targeter::PlanarPerpPTargeter, fileName::String, paramName:
         currentError::Float64 = abs(lowerData[paramName]-paramValue)
         iter::Int16 = Int16(1)
         while (currentError > 1E-8) && (iter <= 20)
-            midSolution::MBD.CR3BPMultipleShooterProblem = correct(targeter, midInitialCondition, [0, midPeriod], midJC; tol, JTol)
+            midSolution::MBD.CR3BPMultipleShooterProblem = correct(targeter, midInitialCondition, [0, midPeriod], midPeriod; tol, JTol)
             newInitialCondition::Vector{Float64} = midSolution.nodes[1].state.data[1:6]
             newPeriod::Float64 = getPeriod(targeter, midSolution)
             newMonodromy::Matrix{Float64} = getMonodromy(targeter, midSolution)

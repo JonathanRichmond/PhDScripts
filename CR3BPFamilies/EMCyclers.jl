@@ -53,9 +53,9 @@ eigenSort!(family)
 # println("\nExporting family data...")
 # fullExportCR3BPFamily(family, "FamilyData/CR3BPEMCyclers.mat", "FamilyData/CR3BPEMCyclers.csv")
 
-println("\nTesting interpolation...")
-testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEMCyclers.csv", "JC", 3.1)
-println("Test Orbit:\n\tIC:\t$(testOrbit.initialCondition)\n\tP:\t$(testOrbit.period)\n\tJC:\t$(getJacobiConstant(testOrbit))\n")
+# println("\nTesting interpolation...")
+# testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEMCyclers.csv", "JC", 3.1)
+# println("Test Orbit:\n\tIC:\t$(testOrbit.initialCondition)\n\tP:\t$(testOrbit.period)\n\tJC:\t$(getJacobiConstant(testOrbit))\n")
 
 # println("Plotting orbit...")
 # plotOrbit::Int64 = getNumMembers(family)
