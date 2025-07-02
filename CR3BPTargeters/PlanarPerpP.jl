@@ -3,6 +3,7 @@ Period perpendicular crossing targeter for CR3BP planar orbits
 
 Author: Jonathan Richmond
 C: 6/30/25
+U: 7/2/25
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, StaticArrays
@@ -209,12 +210,9 @@ function interpOrbit(targeter::PlanarPerpPTargeter, fileName::String, paramName:
             midSolution::MBD.CR3BPMultipleShooterProblem = correct(targeter, midInitialCondition, [0, midPeriod], midPeriod; tol, JTol)
             newInitialCondition::Vector{Float64} = midSolution.nodes[1].state.data[1:6]
             newPeriod::Float64 = getPeriod(targeter, midSolution)
-            newMonodromy::Matrix{Float64} = getMonodromy(targeter, midSolution)
             newJC::Float64 = getJacobiConstant(targeter.dynamicsModel, newInitialCondition)
-            newEigenvalues::Vector{Complex{Float64}} = LinearAlgebra.eigen(newMonodromy).values
             newStabilityIndex::Float64 = LinearAlgebra.norm(newEigenvalues, Inf)
-            newTimeConstant::Float64 = newPeriod/log(LinearAlgebra.norm(newEigenvalues, Inf))
-            midData::DataFrames.DataFrameRow = DataFrames.DataFrame("x" => newInitialCondition[1], "y" => newInitialCondition[2], "z" => newInitialCondition[3], "xdot" => newInitialCondition[4], "ydot" => newInitialCondition[5], "zdot" => newInitialCondition[6], "Period" => newPeriod, "JC" => newJC, "Stability Index" => newStabilityIndex, "Time Constant" => newTimeConstant)[1,:]
+            midData::DataFrames.DataFrameRow = DataFrames.DataFrame("x" => newInitialCondition[1], "y" => newInitialCondition[2], "z" => newInitialCondition[3], "xdot" => newInitialCondition[4], "ydot" => newInitialCondition[5], "zdot" => newInitialCondition[6], "Period" => newPeriod, "JC" => newJC, "Stability Index" => newStabilityIndex)[1,:]
             currentValue::Float64 = midData[paramName]
             currentError = abs(currentValue-paramValue)
             printProgress && println("Current parameter value: "*paramName*" = $currentValue")

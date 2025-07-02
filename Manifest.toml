@@ -1362,9 +1362,9 @@ version = "2.41.0+0"
 
 [[deps.LightXML]]
 deps = ["Libdl", "XML2_jll"]
-git-tree-sha1 = "3a994404d3f6709610701c7dabfc03fed87a81f8"
+git-tree-sha1 = "d5d2e3abfb30ea9c2cff81d243e7235b51315ec2"
 uuid = "9c8b4983-aa76-5018-a973-4c85ecc9e179"
-version = "0.9.1"
+version = "0.9.2"
 
 [[deps.LineSearch]]
 deps = ["ADTypes", "CommonSolve", "ConcreteStructs", "FastClosures", "LinearAlgebra", "MaybeInplace", "SciMLBase", "SciMLJacobianOperators", "StaticArraysCore"]
@@ -1459,7 +1459,7 @@ version = "0.9.0"
 
 [[deps.MBD]]
 deps = ["CSV", "Combinatorics", "DataFrames", "DifferentialEquations", "LightXML", "LinearAlgebra", "Logging", "SPICE", "SparseArrays", "StaticArrays", "UpdateJulia"]
-git-tree-sha1 = "42fd8c83bd3ebd9aca698925aafe96919d814d14"
+git-tree-sha1 = "2c5bc680ef5c9a89833265378d18ad2a6c878807"
 repo-rev = "richmo11-memoryChanges"
 repo-url = "https://github.com/JonathanRichmond/MBD.jl.git"
 uuid = "994ce0ec-d6e5-428b-b4b3-7b10f5a0848a"

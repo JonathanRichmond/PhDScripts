@@ -4,6 +4,7 @@ Script for Earth-Moon CR3BP 2:1 prograde resonant orbit family
 
 Author: Jonathan Richmond
 C: 7/1/25
+U: 7/2/25
 """
 module EMRes21Pro
 println()
@@ -73,8 +74,8 @@ eigenSort!(family)
 # GLMakie.scatter!(axis, LagrangePoints[3][1], LagrangePoints[3][2], color = :yellow, markersize = 5, label = L"$L_{3}$" => (; markersize = 20))
 # GLMakie.scatter!(axis, LagrangePoints[4][1], LagrangePoints[4][2], color = :green, markersize = 5, label = L"$L_{4}$" => (; markersize = 20))
 # GLMakie.scatter!(axis, LagrangePoints[5][1], LagrangePoints[5][2], color = :purple, markersize = 5, label = L"$L_{5}$" => (; markersize = 20))
-# GLMakie.scatter!(axis, getPrimaryState(dynamicsModel, 1)[1], getPrimaryState(dynamicsModel, 1)[2], color = :blue, markerspace = :data, markersize = Earth.bodyRadius/getCharLength(systemData), label = L"\mathrm{Earth}" => (; markersize = 20))
-# GLMakie.scatter!(axis, getPrimaryState(dynamicsModel, 2)[1], getPrimaryState(dynamicsModel, 2)[2], color = :gray, markerspace = :data, markersize = Moon.bodyRadius/getCharLength(systemData), label = L"\mathrm{Moon}" => (; markersize = 20))
+# GLMakie.scatter!(axis, getPrimaryState(dynamicsModel, 1)[1], getPrimaryState(dynamicsModel, 1)[2], color = :blue, markerspace = :data, markersize = 2*Earth.bodyRadius/getCharLength(systemData), label = L"\mathrm{Earth}" => (; markersize = 20))
+# GLMakie.scatter!(axis, getPrimaryState(dynamicsModel, 2)[1], getPrimaryState(dynamicsModel, 2)[2], color = :gray, markerspace = :data, markersize = 2*Moon.bodyRadius/getCharLength(systemData), label = L"\mathrm{Moon}" => (; markersize = 20))
 # GLMakie.Legend(figure[1,2], axis)
 
 println()
