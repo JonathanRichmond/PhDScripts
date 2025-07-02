@@ -323,6 +323,46 @@ function CSVExportCR3BPFamily(family::MBD.CR3BPOrbitFamily, file::String)
 end
 
 """
+    CSVExportCR3BPFamily(family, file)
+
+Export CR3BP family data to CSV file
+
+# Arguments
+- `family::CR3BPContinuationFamily`: CR3BP trajectory continuation family object
+- `file::String`: CSV file name
+"""
+function CSVExportCR3BPFamily(family::MBD.CR3BPContinuationFamily, file::String)
+    nMem::Int64 = getNumMembers(family)
+    x::Vector{Float64} = Vector{Float64}(undef, nMem)
+    y::Vector{Float64} = Vector{Float64}(undef, nMem)
+    z::Vector{Float64} = Vector{Float64}(undef, nMem)
+    xdot::Vector{Float64} = Vector{Float64}(undef, nMem)
+    ydot::Vector{Float64} = Vector{Float64}(undef, nMem)
+    zdot::Vector{Float64} = Vector{Float64}(undef, nMem)
+    TOF::Vector{Float64} = Vector{Float64}(undef, nMem)
+    JC::Vector{Float64} = Vector{Float64}(undef, nMem)
+    for t::Int64 = 1:nMem
+        solution = MBD.CR3BPMultipleShooterProblem()
+        numNodes::Int64 = length(family.nodes[t])
+        solution.nodes = [MBD.shallowClone(family.nodes[t][n]) for n = 1:numNodes]
+        solution.segments = [MBD.shallowClone(family.segments[t][s]) for s = 1:numNodes-1]
+        x[t] = solution.nodes[1].state.data[1]
+        y[t] = solution.nodes[1].state.data[2]
+        z[t] = solution.nodes[1].state.data[3]
+        xdot[t] = solution.nodes[1].state.data[4]
+        ydot[t] = solution.nodes[1].state.data[5]
+        zdot[t] = solution.nodes[1].state.data[6]
+        TOF[t] = 0.0
+        for s::Int64 = 1:numNodes-1
+            TOF[t] += solution.segments[s].TOF.data[1]
+        end 
+        JC[t] = getJacobiConstant(solution.nodes[1].dynamicsModel, solution.nodes[1].state.data[1:6])
+    end
+    familyData::DataFrames.DataFrame = DataFrames.DataFrame("x" => x, "y" => y, "z" => z, "xdot" => xdot, "ydot" => ydot, "zdot" => zdot, "TOF" => TOF, "JC" => JC)
+    CSV.write(file, familyData)
+end
+
+"""
     exportBCR4BP12Manifold(manifold, file, name)
 
 Export BCR4BP P1-P2 manifold data to MAT file
@@ -891,6 +931,47 @@ function exportCR3BPOrbit(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Floa
 end
 
 """
+    exportCR3BPTrajectory(solution, file, name)
+
+Export CR3BP trajectory data to MAT file
+
+# Arguments
+- `solution::CR3BPMultipleShooterProblem`: CR3BP multiple shooter problem object
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportCR3BPTrajectory(solution::MBD.CR3BPMultipleShooterProblem, file::MATLAB.MatFile, name::Symbol)
+    propagator = MBD.Propagator()
+    states::Vector{Vector{Float64}} = []
+    epochs::Vector{Float64} = []
+    for n::Int64 in 1:length(solution.nodes)-1
+        arc::MBD.CR3BPArc = propagate(propagator, solution.nodes[n].state.data[1:6], [solution.nodes[n].epoch.data[1], solution.nodes[n+1].epoch.data[1]], solution.nodes[1].dynamicsModel)
+        append!(states, arc.states)
+        append!(epochs, arc.times)
+    end
+    nStates::Int64 = length(epochs)
+    x::Vector{Float64} = zeros(Float64, nStates)
+    y::Vector{Float64} = zeros(Float64, nStates)
+    z::Vector{Float64} = zeros(Float64, nStates)
+    xdot::Vector{Float64} = zeros(Float64, nStates)
+    ydot::Vector{Float64} = zeros(Float64, nStates)
+    zdot::Vector{Float64} = zeros(Float64, nStates)
+    t::Vector{Float64} = zeros(Float64, nStates)
+    for s::Int64 in 1:nStates
+        state::Vector{Float64} = states[s]
+        x[s] = state[1]
+        y[s] = state[2]
+        z[s] = state[3]
+        xdot[s] = state[4]
+        ydot[s] = state[5]
+        zdot[s] = state[6]
+        t[s] = epochs[s]
+    end
+    JC::Float64 = getJacobiConstant(solution.nodes[1].dynamicsModel, solution.nodes[1].state.data[1:6])
+    exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, JC, file, name)
+end
+
+"""
     exportCR3BPTrajectory(x0, y0, z0, xdot0, ydot0, zdot0, propTime, dynamicsModel, file, name)
 
 Export CR3BP trajectory data to MAT file
@@ -1153,6 +1234,23 @@ function fullExportCR3BPFamily(family::MBD.CR3BPOrbitFamily, MATFile::String, CS
 end
 
 """
+    fullExportCR3BPFamily(family, MATFile, CSVFile)
+
+Export CR3BP family data to MAT and CSV files
+
+# Arguments
+- `family::CR3BPContinuationFamily`: CR3BP trajectory continuation family object
+- `MATFile::String`: MAT file name
+- `CSVFile::String`: CSV file name
+"""
+function fullExportCR3BPFamily(family::MBD.CR3BPContinuationFamily, MATFile::String, CSVFile::String)
+    mf = MATLAB.MatFile(MATFile, "w")
+    MATExportCR3BPFamily(family, mf)
+    MATLAB.close(mf)
+    CSVExportCR3BPFamily(family, CSVFile)
+end
+
+"""
     MATExportCR3BPFamily(family, file)
 
 Export CR3BP family data to MAT file
@@ -1165,5 +1263,24 @@ function MATExportCR3BPFamily(family::MBD.CR3BPOrbitFamily, file::MATLAB.MatFile
     for o::Int64 = 1:getNumMembers(family)
         orbit::MBD.CR3BPPeriodicOrbit = getMember(family, o)
         exportCR3BPOrbit(orbit, file, Symbol("orbit"*string(o)))
+    end
+end
+
+"""
+    MATExportCR3BPFamily(family, file)
+
+Export CR3BP family data to MAT file
+
+# Arguments
+- `family::CR3BPContinuationFamily`: CR3BP trajectory continuation family object
+- `file::MatFile`: MAT file
+"""
+function MATExportCR3BPFamily(family::MBD.CR3BPContinuationFamily, file::MATLAB.MatFile)
+    for t::Int64 = 1:getNumMembers(family)
+        solution = MBD.CR3BPMultipleShooterProblem()
+        numNodes::Int64 = length(family.nodes[t])
+        solution.nodes = [MBD.shallowClone(family.nodes[t][n]) for n = 1:numNodes]
+        solution.segments = [MBD.shallowClone(family.segments[t][s]) for s = 1:numNodes-1]
+        exportCR3BPTrajectory(solution, file, Symbol("orbit"*string(t)))
     end
 end
