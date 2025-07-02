@@ -3,13 +3,13 @@ Jacobi constant perpendicular crossing multiple shooter for CR3BP spatial orbits
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 6/24/25
+U: 7/2/25
 """
 
-using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, SparseArrays, StaticArrays, Statistics
+using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, StaticArrays, Statistics
 
 export SpatialPerpJCMSTargeter
-export correct, doContinuation!, getApproxEigenData, getMonodromy, getPeriod, propagateState, tryConverging!#, getIndividualPeriodicOrbit, interpOrbit
+export correct, getIndividualPeriodicOrbit, getMonodromy, getPeriod, interpOrbit, propagateState
 
 """
     SpatialPerpJCMSTargeter(dynamicsModel)
@@ -19,7 +19,7 @@ CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
 # Arguments
 - `dynamicsModel::CR3BPDynamicsModel`: CR3BP dynamics model object
 """
-struct SpatialPerpJCMSTargeter <: MBD.AbstractTargeter
+struct SpatialPerpJCMSTargeter
     dynamicsModel::MBD.CR3BPDynamicsModel                               # CR3BP dynamics model object
 
     function SpatialPerpJCMSTargeter(dynamicsModel::MBD.CR3BPDynamicsModel)
@@ -30,7 +30,7 @@ struct SpatialPerpJCMSTargeter <: MBD.AbstractTargeter
 end
 
 """
-    correct(targeter, qVector, tVector, numNodes, targetJC; tol)
+    correct(targeter, qVector, tVector, numNodes, targetJC; tol, JTol)
 
 Return corrected CR3BP multiple shooter problem object
 
@@ -41,11 +41,12 @@ Return corrected CR3BP multiple shooter problem object
 - `numNodes::Int64`: Number of nodes
 - `targetJC::Float64`: Target Jacobi constant
 - `tol::Float64`: Convergence tolerance (default = 1E-11)
+- `JTol::Float64`: Jacobian accuracy tolerance (default = 2E-3)
 """
-function correct(targeter::SpatialPerpJCMSTargeter, qVector::Vector{Vector{Float64}}, tVector::Vector{Float64}, numNodes::Int64, targetJC::Float64, tol::Float64 = 1E-11)
+function correct(targeter::SpatialPerpJCMSTargeter, qVector::Vector{Vector{Float64}}, tVector::Vector{Float64}, numNodes::Int64, targetJC::Float64; tol::Float64 = 1E-11, JTol::Float64 = 2E-3)
     nodes::Vector{MBD.CR3BPNode} = []
     for n = 1:numNodes
-        node = MBD.CR3BPNode(tVector[n], qVector[n], dynamicsModel)
+        node = MBD.CR3BPNode(tVector[n], qVector[n], targeter.dynamicsModel)
         node.state.name = "Node "*string(n)*" State"
         node.epoch.name = "Node "*string(n)*" Epoch"
         push!(nodes, node)
@@ -62,10 +63,9 @@ function correct(targeter::SpatialPerpJCMSTargeter, qVector::Vector{Vector{Float
     map(s -> addConstraint!(problem, MBD.CR3BPContinuityConstraint(s)), segments)
     addConstraint!(problem, MBD.CR3BPStateConstraint(nodes[end], [2, 4, 6], [0.0, 0.0, 0.0]))
     addConstraint!(problem, MBD.JacobiConstraint(nodes[1], targetJC))
-    checkJacobian(problem)
+    checkJacobian(problem, relTol = JTol)
     shooter = MBD.CR3BPMultipleShooter(tol)
     # shooter.printProgress = true
-    shooter.maxIterations = 50
     solution::MBD.CR3BPMultipleShooterProblem = MBD.solve!(shooter, problem)
     map(s -> updateTerminalNodeEpoch!(s), solution.segments)
 
@@ -73,166 +73,42 @@ function correct(targeter::SpatialPerpJCMSTargeter, qVector::Vector{Vector{Float
 end
 
 """
-    doContinuation!(targeter, multipleShooterContinuationEngine, initialGuess1, initialGuess2, numSegs; tol)
+    getIndividualPeriodicOrbit(targeter, family, orbit)
 
-Return family of solutions
+Return periodic orbit object
 
 # Arguments
-- `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
-- `multipleShooterContinuationEngine::CR3BPMultipleShooterContinuationEngine`: CR3BP multiple shooter continuation engine object
-- `initialGuess1::CR3BPMultipleShooterProblem`: First member of family
-- `initialGuess2::CR3BPMultipleShooterProblem`: Second member of family
-- `numSegs::Int64`: Number of segments
-- `tol::Float64`: Convergence tolerance (default = 1E-11)
+- `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial perpendicular crossing Jacobi constant multiple shooter object
+- `family::CR3BPContinuationFamily`: CR3BP continuation family object
+- `orbit::Int64`: Orbit identifier
 """
-function doContinuation!(targeter::SpatialPerpJCMSTargeter, multipleShooterContinuationEngine::MBD.CR3BPMultipleShooterContinuationEngine, initialGuess1::MBD.CR3BPMultipleShooterProblem, initialGuess2::MBD.CR3BPMultipleShooterProblem, numSegs::Int64, tol::Float64 = 1E-11)
-    isempty(multipleShooterContinuationEngine.endChecks) && throw(ErrorException("Cannot do continuation without at least one end check"))
-    resetEngine!(multipleShooterContinuationEngine, initialGuess1, initialGuess2)
-    multipleShooterContinuationEngine.corrector.printProgress = multipleShooterContinuationEngine.printProgress
-    multipleShooterContinuationEngine.printProgress && println("Converging initial guesses...")
-    multipleShooterContinuationEngine.dataInProgress.twoPreviousSolution = convergeInitialSolution(multipleShooterContinuationEngine, initialGuess1)
-    multipleShooterContinuationEngine.dataInProgress.previousSolution = convergeInitialSolution(multipleShooterContinuationEngine, initialGuess2)
-    multipleShooterContinuationEngine.dataInProgress.numIterations = multipleShooterContinuationEngine.corrector.recentIterationCount
-    push!(multipleShooterContinuationEngine.dataInProgress.family.nodes, [MBD.shallowClone(multipleShooterContinuationEngine.dataInProgress.twoPreviousSolution.nodes[n]) for n = 1:length(multipleShooterContinuationEngine.dataInProgress.twoPreviousSolution.nodes)], [MBD.shallowClone(multipleShooterContinuationEngine.dataInProgress.previousSolution.nodes[n]) for n = 1:length(multipleShooterContinuationEngine.dataInProgress.previousSolution.nodes)])
-    push!(multipleShooterContinuationEngine.dataInProgress.family.segments, [MBD.shallowClone(multipleShooterContinuationEngine.dataInProgress.twoPreviousSolution.segments[s]) for s = 1:length(multipleShooterContinuationEngine.dataInProgress.twoPreviousSolution.segments)], [MBD.shallowClone(multipleShooterContinuationEngine.dataInProgress.previousSolution.segments[s]) for s = 1:length(multipleShooterContinuationEngine.dataInProgress.previousSolution.segments)])
-    multipleShooterContinuationEngine.dataInProgress.initialGuess = initialGuess2
-    multipleShooterContinuationEngine.dataInProgress.converging = true
-    multipleShooterContinuationEngine.dataInProgress.forceEndContinuation = false
-    multipleShooterContinuationEngine.dataInProgress.currentStepSize = multipleShooterContinuationEngine.stepSizeGenerator.initialStepSize
-    while (!endContinuation(multipleShooterContinuationEngine, multipleShooterContinuationEngine.dataInProgress) && !multipleShooterContinuationEngine.dataInProgress.forceEndContinuation)
-        multipleShooterContinuationEngine.printProgress && println("\nConverging family member $(getNumSteps(multipleShooterContinuationEngine.dataInProgress)+1)...")
-        tryConverging!(targeter, multipleShooterContinuationEngine, numSegs, tol)
-        while (!multipleShooterContinuationEngine.dataInProgress.converging && !multipleShooterContinuationEngine.dataInProgress.forceEndContinuation)
-            tryConverging!(targeter, multipleShooterContinuationEngine, numSegs, tol)
-        end
-        if (multipleShooterContinuationEngine.storeIntermediateMembers && multipleShooterContinuationEngine.dataInProgress.converging)
-            println("\tConverged Initial State: $(multipleShooterContinuationEngine.dataInProgress.previousSolution.nodes[1].state.data[1:6])")
-            push!(multipleShooterContinuationEngine.dataInProgress.family.nodes, [MBD.shallowClone(multipleShooterContinuationEngine.dataInProgress.previousSolution.nodes[n]) for n = 1:length(multipleShooterContinuationEngine.dataInProgress.previousSolution.nodes)])
-            push!(multipleShooterContinuationEngine.dataInProgress.family.segments, [MBD.shallowClone(multipleShooterContinuationEngine.dataInProgress.previousSolution.segments[s]) for s = 1:length(multipleShooterContinuationEngine.dataInProgress.previousSolution.segments)])
-        end
-    end
-    if (!multipleShooterContinuationEngine.dataInProgress.converging && (getNumSteps(multipleShooterContinuationEngine.dataInProgress) == 2))
-        throw(ErrorException("Could not converge any solutions beyond initial guess"))
-    end
-    if (!multipleShooterContinuationEngine.storeIntermediateMembers && (getNumSteps(multipleShooterContinuationEngine.dataInProgress) > 2))
-        push!(multipleShooterContinuationEngine.dataInProgress.family.nodes, [MBD.shallowClone(multipleShooterContinuationEngine.dataInProgress.previousSolution.nodes[n]) for n = 1:length(multipleShooterContinuationEngine.dataInProgress.previousSolution.nodes)])
-        push!(multipleShooterContinuationEngine.dataInProgress.family.segments, [MBD.shallowClone(multipleShooterContinuationEngine.dataInProgress.previousSolution.segments[s]) for s = 1:length(multipleShooterContinuationEngine.dataInProgress.previousSolution.segments)])
-    end
+function getIndividualPeriodicOrbit(targeter::SpatialPerpJCMSTargeter, family::MBD.CR3BPContinuationFamily, orbit::Int64)
+    numNodes::Int64 = length(family.nodes[orbit])
+    period::Float64 = getPeriod(targeter, family.segments[orbit])
+    orbitStates::Vector{Vector{Float64}} = append!([family.nodes[orbit][n].state.data[1:6] for n = 1:numNodes-1], [family.nodes[orbit][n].state.data[1:6].*[1, -1, 1, -1, 1, -1] for n = numNodes:-1:1])
+    orbitTimes::Vector{Float64} = append!([family.nodes[orbit][n].epoch.data[1] for n = 1:numNodes-1], [period-family.nodes[orbit][n].epoch.data[1] for n = numNodes:-1:1]) 
 
-    return multipleShooterContinuationEngine.dataInProgress.family
+    return MBD.CR3BPMSPeriodicOrbit(targeter.dynamicsModel, orbitStates, orbitTimes, period, getMonodromy(targeter, family.segments[orbit]))
 end
 
 """
-    getApproxEigenData(targeter, solution; clusterTol, complexTol)
-
-Return approximate orbit eigenvalues and -vectors
-
-# Arguments
-- `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
-- `solution::CR3BPMultipleShooterProblem`: Solved CR3BP multiple shooter problem object
-- `clusterTol::Float64`: Clustering relative tolerance (default = 1E-5)
-- `complexTol::Float64`: Complex number relative tolerance (default = 1E-5)
-"""
-function getApproxEigenData(targeter::SpatialPerpJCMSTargeter, solution::MBD.CR3BPMultipleShooterProblem, clusterTol::Float64 = 1E-5, complexTol::Float64 = 1E-5)
-    propagator = MBD.Propagator(equationType = MBD.STM)
-    nStates::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
-    nSegs::Int64 = length(solution.segments)
-    renormalizeEvent::DifferentialEquations.DiscreteCallback = DifferentialEquations.PeriodicCallback(MBD.renormalize!, 0.1)
-    STMs::Vector{Matrix{Float64}} = []
-    for s::Int64 = 1:nSegs
-        Rs::Vector{Matrix{Float64}} = []
-        propSegment::MBD.CR3BPArc = propagateWithPeriodicEvent(propagator, renormalizeEvent, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].originNode.state.data, MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel, [targeter.dynamicsModel, Rs])
-        endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
-        STM::Matrix{Float64} = reshape(endState[7:42], (6,6))
-        for R::Matrix{Float64} in reverse(Rs)
-            STM *= R
-        end
-        push!(STMs, STM)
-    end
-    for s::Int64 = nSegs:-1:1
-        Rs::Vector{Matrix{Float64}} = []
-        propSegment::MBD.CR3BPArc = propagateWithPeriodicEvent(propagator, renormalizeEvent, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].terminalNode.state.data.*[1, -1, 1, -1, 1, -1], MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel, [targeter.dynamicsModel, Rs])
-        endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
-        STM::Matrix{Float64} = reshape(endState[7:42], (6,6))
-        for R::Matrix{Float64} in reverse(Rs)
-            STM *= R
-        end
-        push!(STMs, STM)
-    end
-    rows::Vector{Int64} = []
-    cols::Vector{Int64} = []
-    vals::Vector{Float64} = []
-    r_offset::Int64 = 0
-    c_offset::Int64 = 0
-    for S::StaticArrays.SMatrix{6, 6, Float64} in STMs
-        for i::Int64 = 1:6, j::Int64 = 1:6
-            push!(rows, r_offset+i)
-            push!(cols, c_offset+j)
-            push!(vals, S[i,j])
-        end
-        r_offset += 6
-        c_offset += 6
-    end
-    Phi::SparseArrays.SparseMatrixCSC{Float64, Int64} = SparseArrays.sparse(rows, cols, vals)
-    offI::SparseArrays.SparseMatrixCSC{Float64, Int64} = SparseArrays.spzeros(2*nSegs*6, 2*nSegs*6)
-    for i::Int64 = 1:2*nSegs-1
-        offI[(6*(i-1)+1):(6*i),(6*i+1):(6*(i+1))] = SparseArrays.sparse(LinearAlgebra.I, 6, 6)
-    end
-    offI[(2*nSegs*6-5):(2*nSegs*6),1:6] = SparseArrays.sparse(LinearAlgebra.I, 6, 6)
-    E::LinearAlgebra.Eigen = LinearAlgebra.eigen(offI\Matrix(Phi))
-    Lambda::Vector{Complex{Float64}} = E.values.^(2*nSegs)
-    indices::Vector{Int64} = sortperm(Lambda, by = x -> abs(real(x)))
-    sortedLambda::Vector{Complex{Float64}} = Lambda[indices]
-    sortedV::Matrix{Complex{Float64}} = E.vectors[1:6,indices]
-    clusters::Vector{Vector{Tuple{Complex{Float64}, Vector{Complex{Float64}}}}} = [[(sortedLambda[1], sortedV[:,1])]]
-    for e::Int64 in 2:(2*nSegs*6)
-        lambda::Complex{Float64} = sortedLambda[e]
-        v::Vector{Complex{Float64}} = sortedV[:,e]
-        added::Bool = false
-        for c::Vector{Tuple{Complex{Float64}, Vector{Complex{Float64}}}} in clusters
-            lambdas::Vector{Complex{Float64}} = [x[1] for x in c]
-            isConjugate::Bool = (any(x -> isapprox(lambda, conj(x); atol = 1E-8), lambdas) && (abs(imag(lambda)) > complexTol*max(abs(real(lambda)), 1E-12)))
-            if (abs(real(lambda)-real(lambdas[end]))/max(abs(real(lambda)), abs(real(lambdas[end])), 1E-12) < clusterTol) && !isConjugate
-                push!(c, (lambda, v))
-                added = true
-                break
-            end
-        end
-        !added && push!(clusters, [(lambda, v)])
-    end
-    Lambda_avg::Vector{Complex{Float64}} = Vector{Float64}(undef, length(clusters))
-    V_avg::Matrix{Complex{Float64}} = Matrix{Float64}(undef, 6, length(clusters))
-    for c::Int64 = 1:length(clusters)
-        lambdas::Vector{Complex{Float64}} = [x[1] for x in clusters[c]]
-        vs::Vector{Vector{Complex{Float64}}} = [x[2] for x in clusters[c]]
-        lambda_avg::Complex{Float64} = Statistics.mean(lambdas)
-        index::Int64 = argmin(abs.(lambdas.-lambda_avg))
-        v_avg::Vector{Complex{Float64}} = vs[index]
-        Lambda_avg[c] = lambda_avg
-        V_avg[:,c] = v_avg
-    end
-
-    return (Lambda_avg, V_avg)
-end
-
-"""
-    getMonodromy(targeter, solution)
+    getMonodromy(targeter, segments)
 
 Return orbit monodromy matrix
 
 # Arguments
 - `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
-- `solution::CR3BPMultipleShooterProblem`: Solved CR3BP multiple shooter problem object
+- `segments::Vector{CR3BPSegment}`: CR3BP segment objects
 """
-function getMonodromy(targeter::SpatialPerpJCMSTargeter, solution::MBD.CR3BPMultipleShooterProblem)
+function getMonodromy(targeter::SpatialPerpJCMSTargeter, segments::Vector{MBD.CR3BPSegment})
     propagator = MBD.Propagator(equationType = MBD.STM)
     nStates::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
-    nSegs::Int64 = length(solution.segments)
+    nSegs::Int64 = length(segments)
     renormalizeEvent::DifferentialEquations.DiscreteCallback = DifferentialEquations.PeriodicCallback(MBD.renormalize!, 0.1)
     STMs::Vector{Matrix{Float64}} = []
     for s::Int64 = 1:nSegs
         Rs::Vector{Matrix{Float64}} = []
-        propSegment::MBD.CR3BPArc = propagateWithPeriodicEvent(propagator, renormalizeEvent, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].originNode.state.data, MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel, [targeter.dynamicsModel, Rs])
+        propSegment::MBD.CR3BPArc = propagateWithPeriodicEvent(propagator, renormalizeEvent, appendExtraInitialConditions(targeter.dynamicsModel, segments[s].originNode.state.data, MBD.STM), [0,segments[s].TOF.data[1]], targeter.dynamicsModel, [targeter.dynamicsModel, Rs])
         endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
         STM::Matrix{Float64} = reshape(endState[7:42], (6,6))
         for R::Matrix{Float64} in reverse(Rs)
@@ -242,7 +118,7 @@ function getMonodromy(targeter::SpatialPerpJCMSTargeter, solution::MBD.CR3BPMult
     end
     for s::Int64 = nSegs:-1:1
         Rs::Vector{Matrix{Float64}} = []
-        propSegment::MBD.CR3BPArc = propagateWithPeriodicEvent(propagator, renormalizeEvent, appendExtraInitialConditions(targeter.dynamicsModel, solution.segments[s].terminalNode.state.data.*[1, -1, 1, -1, 1, -1], MBD.STM), [0, solution.segments[s].TOF.data[1]], targeter.dynamicsModel, [targeter.dynamicsModel, Rs])
+        propSegment::MBD.CR3BPArc = propagateWithPeriodicEvent(propagator, renormalizeEvent, appendExtraInitialConditions(targeter.dynamicsModel, segments[s].terminalNode.state.data.*[1, -1, 1, -1, 1, -1], MBD.STM), [0, segments[s].TOF.data[1]], targeter.dynamicsModel, [targeter.dynamicsModel, Rs])
         endState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(propSegment, -1))
         STM::Matrix{Float64} = reshape(endState[7:42], (6,6))
         for R::Matrix{Float64} in reverse(Rs)
@@ -256,6 +132,19 @@ function getMonodromy(targeter::SpatialPerpJCMSTargeter, solution::MBD.CR3BPMult
     end
 
     return M
+end
+
+"""
+    getMonodromy(targeter, solution)
+
+Return orbit monodromy matrix
+
+# Arguments
+- `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
+- `solution::CR3BPMultipleShooterProblem`: Solved CR3BP multiple shooter problem object
+"""
+function getMonodromy(targeter::SpatialPerpJCMSTargeter, solution::MBD.CR3BPMultipleShooterProblem)
+    return getMonodromy(targeter, solution.segments)
 end
 
 """
@@ -286,12 +175,115 @@ Return orbit period
 - `solution::CR3BPMultipleShooterProblem`: Solved CR3BP multiple shooter problem object
 """
 function getPeriod(targeter::SpatialPerpJCMSTargeter, solution::MBD.CR3BPMultipleShooterProblem)
-    TOF::Float64 = 0.0
-    for s::Int64 = 1:length(solution.segments)
-        TOF += solution.segments[s].TOF.data[1]
+    return getPeriod(targeter, solution.segments)
+end
+
+"""
+    interpOrbit(targeter, fileName, paramName, paramValue, numNodes; choiceIndex, printProgress, tol, JTol)
+
+Return interpolated periodic orbit object via bisection
+
+# Arguments
+- `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
+- `fileName::String`: Family data CSV file
+- `paramName::String`: Desired parameter name
+- `paramValue::Float64`: Desired parameter value
+- `numNodes::Int64`: Number of nodes
+- `choiceIndex::Int64`: Desired orbit option index (default = 1)
+- `printProgress::Bool`: Print progress? (default = false)
+- `tol::Float64`: Convergence tolerance (default = 1E-11)
+- `JTol::Float64`: Jacobian accuracy tolerance (default = 2E-3)
+"""
+function interpOrbit(targeter::SpatialPerpJCMSTargeter, fileName::String, paramName::String, paramValue::Float64, numNodes::Int64; choiceIndex::Int64 = 1, printProgress::Bool = false, tol::Float64 = 1E-11, JTol::Float64 = 2E-3)
+    familyData::DataFrames.DataFrame = DataFrames.DataFrame(CSV.File(fileName))
+    nMem::Int16 = Int16(size(familyData, 1))
+    !any(occursin.(paramName, names(familyData))) && throw(ErrorException("Parameter not supported"))
+    increasing::Bool = ((familyData[2,paramName]-familyData[1,paramName]) > 0) ? true : false
+    switchIndices::Vector{Int16} = [1]
+    for d::Int16 in Int16(3):nMem
+        if (familyData[d,paramName]-familyData[d-1,paramName] > 0) != increasing
+            increasing = !increasing
+            push!(switchIndices, d-1)
+        end
+    end
+    push!(switchIndices, nMem)
+    solutionIndices::Vector{Int16} = []
+    for s::Int16 in Int16(2):Int16(length(switchIndices))
+        rangeData::DataFrames.DataFrame = familyData[switchIndices[s-1]:switchIndices[s],:]
+        closestIndex::Int16 = Int16(argmin(abs.(rangeData[:,paramName].-paramValue)))
+        (abs(rangeData[closestIndex,paramName]-paramValue) <= 1E-2) && push!(solutionIndices, closestIndex+switchIndices[s-1]-1)
+    end
+    isempty(solutionIndices) && throw(ErrorException("Family does not contain member with desired value"))
+    nSol::Int16 = Int16(length(solutionIndices))
+    index::Int16 = solutionIndices[1]
+    if nSol > Int16(1)
+        println("$nSol orbit options exist; choosing selected index...")
+        index = solutionIndices[choiceIndex]
+    end
+    propagator = MBD.Propagator(equationType = MBD.STM)
+    nStates::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
+    G::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(1.0, 0, 0, 0, 0, 0, 0, -1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, -1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, -1.0)
+    Omega::StaticArrays.SMatrix{3, 3, Float64} = StaticArrays.SMatrix{3, 3, Float64}(0, -1.0, 0, 1.0, 0, 0, 0, 0, 0)
+    A::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}([zeros(Float64, (3,3)) -1 .*LinearAlgebra.I; LinearAlgebra.I -2 .*Omega])
+    B::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}([-2 .*Omega LinearAlgebra.I; -1 .*LinearAlgebra.I zeros(Float64, (3,3))])
+    if abs(familyData[index,paramName]-paramValue) <= 1E-8
+        println("Orbit already exists in database!")
+        orbitData::DataFrames.DataFrameRow = familyData[index,:]
+        initialCondition::Vector{Float64} = [orbitData[p] for p in ["x", "y", "z", "xdot", "ydot", "zdot"]]
+        period::Float64 = orbitData["Period"]
+        halfOrbit::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, initialCondition, MBD.STM), [0, period/2], targeter.dynamicsModel)
+        PCState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(halfOrbit, -1))
+        PCSTM::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(reshape(PCState[7:42], (6,6)))
+        monodromy::Matrix{Float64} = G*A*(PCSTM')*B*G*PCSTM
+        orbit = MBD.CR3BPPeriodicOrbit(targeter.dynamicsModel, initialCondition, period, monodromy)
+    else
+        println("Orbit does not already exist in database; attempting bisection...")
+        lowerBound::Int16 = index-Int16(1)
+        upperBound::Int16 = index+Int16(1)
+        (index == Int16(1)) && (lowerBound = 1)
+        (index == nMem) && (upperBound = nMem)
+        boundsData::DataFrames.DataFrame = DataFrames.sort(familyData[lowerBound:upperBound,:], paramName)
+        lowerData::DataFrames.DataFrameRow = boundsData[1,:]
+        upperData::DataFrames.DataFrameRow = boundsData[size(boundsData, 1),:]
+        midInitialCondition::Vector{Float64} = [lowerData[p]+0.5*(upperData[p]-lowerData[p]) for p = ["x", "y", "z", "xdot", "ydot", "zdot"]]
+        midPeriod::Float64 = lowerData["Period"]+0.5*(upperData["Period"]-lowerData["Period"])
+        midJC::Float64 = lowerData["JC"]+0.5*(upperData["JC"]-lowerData["JC"])
+        currentError::Float64 = abs(lowerData[paramName]-paramValue)
+        iter::Int16 = Int16(1)
+        while (currentError > 1E-8) && (iter <= 20)
+            simplePropagator = MBD.Propagator()
+            guessArc::MBD.CR3BPArc = propagate(simplePropagator, midInitialCondition, [0, midPeriod/2], targeter.dynamicsModel)
+            numStates::Int64 = getStateCount(guessArc)
+            indices::Vector{Int64} = round.(Int64, range(1, numStates, numNodes))
+            stateGuesses::Vector{Vector{Float64}} = [getStateByIndex(guessArc, indices[i]) for i = eachindex(indices)]
+            timeGuesses::Vector{Float64} = [getTimeByIndex(guessArc, indices[i]) for i = eachindex(indices)]
+            midSolution::MBD.CR3BPMultipleShooterProblem = correct(targeter, stateGuesses, timeGuesses, numNodes, midJC; tol, JTol)
+            newInitialCondition::Vector{Float64} = midSolution.nodes[1].state.data[1:6]
+            newPeriod::Float64 = getPeriod(targeter, midSolution)
+            newMonodromy::Matrix{Float64} = getMonodromy(targeter, midSolution)
+            newJC::Float64 = getJacobiConstant(targeter.dynamicsModel, newInitialCondition)
+            newEigenvalues::Vector{Complex{Float64}} = LinearAlgebra.eigen(newMonodromy).values
+            newStabilityIndex::Float64 = LinearAlgebra.norm(newEigenvalues, Inf)
+            newTimeConstant::Float64 = newPeriod/log(LinearAlgebra.norm(newEigenvalues, Inf))
+            midData::DataFrames.DataFrameRow = DataFrames.DataFrame("x" => newInitialCondition[1], "y" => newInitialCondition[2], "z" => newInitialCondition[3], "xdot" => newInitialCondition[4], "ydot" => newInitialCondition[5], "zdot" => newInitialCondition[6], "Period" => newPeriod, "JC" => newJC, "Stability Index" => newStabilityIndex, "Time Constant" => newTimeConstant)[1,:]
+            currentValue::Float64 = midData[paramName]
+            currentError = abs(currentValue-paramValue)
+            printProgress && println("Current parameter value: "*paramName*" = $currentValue")
+            (sign(currentValue-paramValue) == sign(lowerData[paramName]-paramValue)) ? (lowerData = midData) : (upperData = midData)
+            midInitialCondition = [lowerData[p]+0.5*(upperData[p]-lowerData[p]) for p = ["x", "y", "z", "xdot", "ydot", "zdot"]]
+            midPeriod = lowerData["Period"]+0.5*(upperData["Period"]-lowerData["Period"])
+            midJC = lowerData["JC"]+0.5*(upperData["JC"]-lowerData["JC"])
+            iter += Int16(1)
+        end
+        (iter > 50) && throw(ErrorException("Bisection failed"))
+        halfOrbit = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, midInitialCondition, MBD.STM), [0, midPeriod/2], targeter.dynamicsModel)
+        PCState = StaticArrays.SVector{nStates, Float64}(getStateByIndex(halfOrbit, -1))
+        PCSTM = StaticArrays.SMatrix{6, 6, Float64}(reshape(PCState[7:42], (6,6)))
+        monodromy = G*A*(PCSTM')*B*G*PCSTM
+        orbit = MBD.CR3BPPeriodicOrbit(targeter.dynamicsModel, midInitialCondition, midPeriod, monodromy)
     end
 
-    return 2*TOF
+    return orbit
 end
 
 """
@@ -309,53 +301,4 @@ function propagateState(targeter::SpatialPerpJCMSTargeter, q_simple::Vector{Floa
     arc::MBD.CR3BPArc = propagate(propagator, q_simple, tSpan, targeter.dynamicsModel)
 
     return getStateByIndex(arc, -1)
-end
-
-"""
-    tryConverging!(targeter, multipleShooterContinuationEngine, numSegs; tol)
-
-Return updated CR3BP multiple shooter continuation engine object
-
-# Arguments
-- `targeter::SpatialPerpJCMSTargeter`: CR3BP spatial Jacobi constant perpendicular crossing multiple shooter object
-- `multipleShooterContinuationEngine::CR3BPMultipleShooterContinuationEngine`: CR3BP multiple shooter continuation engine object
-- `numSegs::Int64`: Number of segments
-- `tol::Float64`: Convergence tolerance (default = 1E-11)
-"""
-function tryConverging!(targeter::SpatialPerpJCMSTargeter, multipleShooterContinuationEngine::MBD.CR3BPMultipleShooterContinuationEngine, numSegs::Int64, tol::Float64 = 1E-11)
-    stateStep::Vector{Float64} = computeStateStep(multipleShooterContinuationEngine, multipleShooterContinuationEngine.dataInProgress)
-    timeStep::Float64 = computeTimeStep(multipleShooterContinuationEngine, multipleShooterContinuationEngine.dataInProgress)
-    updateStepSize!(multipleShooterContinuationEngine.stepSizeGenerator, multipleShooterContinuationEngine.dataInProgress)
-    multipleShooterContinuationEngine.printProgress && println("\tCurrent step size: $(multipleShooterContinuationEngine.dataInProgress.currentStepSize)")
-    try
-        twoPreviousConvergedSolution::MBD.CR3BPMultipleShooterProblem = multipleShooterContinuationEngine.dataInProgress.twoPreviousSolution
-        previousConvergedSolution::MBD.CR3BPMultipleShooterProblem = multipleShooterContinuationEngine.dataInProgress.previousSolution
-        targJC::Float64 = getJacobiConstant(targeter.dynamicsModel, previousConvergedSolution.nodes[1].state.data[1:6])+multipleShooterContinuationEngine.dataInProgress.currentStepSize
-        println("\tTarget Jacobi Constant: $targJC")
-        multipleShooterContinuationEngine.dataInProgress.twoPreviousSolution = MBD.deepClone(multipleShooterContinuationEngine.dataInProgress.previousSolution)
-        multipleShooterContinuationEngine.dataInProgress.previousSolution = correct(targeter, previousConvergedSolution.nodes[1].state.data+stateStep.*multipleShooterContinuationEngine.dataInProgress.currentStepSize, [0, getPeriod(targeter, previousConvergedSolution)+timeStep*multipleShooterContinuationEngine.dataInProgress.currentStepSize], numSegs, targJC, tol)
-        multipleShooterContinuationEngine.dataInProgress.converging = true
-        for jumpCheck::MBD.AbstractContinuationJumpCheck in multipleShooterContinuationEngine.jumpChecks
-            if typeof(jumpCheck) == MBD.BoundingBoxJumpCheck
-                for (index::MBD.Variable, value::Int16) in multipleShooterContinuationEngine.dataInProgress.previousSolution.freeVariableIndexMap
-                    if index.name == jumpCheck.paramName
-                        addBounds!(jumpCheck, multipleShooterContinuationEngine.dataInProgress.previousSolution, index, jumpCheck.paramBounds)
-                        multipleShooterContinuationEngine.dataInProgress.converging = isFamilyMember(jumpCheck, multipleShooterContinuationEngine.dataInProgress)
-                        !multipleShooterContinuationEngine.dataInProgress.converging && println("\tSolution jumped")
-                        removeBounds!(jumpCheck, multipleShooterContinuationEngine.dataInProgress.previousSolution, index)
-                    end
-                end
-            end
-        end
-        if multipleShooterContinuationEngine.dataInProgress.converging
-            multipleShooterContinuationEngine.dataInProgress.numIterations = multipleShooterContinuationEngine.corrector.recentIterationCount
-            multipleShooterContinuationEngine.dataInProgress.nextGuess = MBD.deepClone(multipleShooterContinuationEngine.dataInProgress.previousSolution)
-        else
-            multipleShooterContinuationEngine.dataInProgress.twoPreviousSolution = twoPreviousConvergedSolution
-            multipleShooterContinuationEngine.dataInProgress.previousSolution = previousConvergedSolution
-        end
-    catch err
-        multipleShooterContinuationEngine.dataInProgress.converging = false
-        multipleShooterContinuationEngine.printProgress && println("\tFailed to converge")
-    end
 end
