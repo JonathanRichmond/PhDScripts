@@ -3,7 +3,7 @@ Export utility functions
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 6/30/25
+U: 7/2/25
 """
 
 using MBD, CSV, DataFrames, LinearAlgebra, MATLAB
@@ -820,6 +820,48 @@ function exportCR3BPOrbit(orbit::MBD.CR3BPPeriodicOrbit, file::MATLAB.MatFile, n
         t[s] = getTimeByIndex(orbitArc, s)
     end
     JC::Float64 = MBD.getJacobiConstant(orbit)
+    varsig::Float64 = getStabilityIndex(orbit)
+    exportCR3BPOrbit(x, y, z, xdot, ydot, zdot, t, orbit.period, JC, varsig, file, name)
+end
+
+"""
+    exportCR3BPOrbit(orbit, file, name)
+
+Export CR3BP multiple shooter orbit data to MAT file
+
+# Arguments
+- `orbit::CR3BPMSPeriodicOrbit`: CR3BP multiple shooter periodic orbit object
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportCR3BPOrbit(orbit::MBD.CR3BPMSPeriodicOrbit, file::MATLAB.MatFile, name::Symbol)
+    propagator = MBD.Propagator()
+    orbitStates::Vector{Vector{Float64}} = []
+    orbitEpochs::Vector{Float64} = []
+    for n::Int64 in 1:length(orbit.nodeEpochs)-1
+        arc::MBD.CR3BPArc = propagate(propagator, orbit.nodeStates[n], [orbit.nodeEpochs[n], orbit.nodeEpochs[n+1]], orbit.dynamicsModel)
+        append!(orbitStates, arc.states)
+        append!(orbitEpochs, arc.times)
+    end
+    nStates::Int64 = length(orbitEpochs)
+    x::Vector{Float64} = zeros(Float64, nStates)
+    y::Vector{Float64} = zeros(Float64, nStates)
+    z::Vector{Float64} = zeros(Float64, nStates)
+    xdot::Vector{Float64} = zeros(Float64, nStates)
+    ydot::Vector{Float64} = zeros(Float64, nStates)
+    zdot::Vector{Float64} = zeros(Float64, nStates)
+    t::Vector{Float64} = zeros(Float64, nStates)
+    for s::Int64 in 1:nStates
+        state::Vector{Float64} = orbitStates[s]
+        x[s] = state[1]
+        y[s] = state[2]
+        z[s] = state[3]
+        xdot[s] = state[4]
+        ydot[s] = state[5]
+        zdot[s] = state[6]
+        t[s] = orbitEpochs[s]
+    end
+    JC::Float64 = getJacobiConstant(orbit)
     varsig::Float64 = getStabilityIndex(orbit)
     exportCR3BPOrbit(x, y, z, xdot, ydot, zdot, t, orbit.period, JC, varsig, file, name)
 end

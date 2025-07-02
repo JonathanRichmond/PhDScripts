@@ -220,22 +220,23 @@ function interpOrbit(targeter::SpatialPerpJCMSTargeter, fileName::String, paramN
         println("$nSol orbit options exist; choosing selected index...")
         index = solutionIndices[choiceIndex]
     end
-    propagator = MBD.Propagator(equationType = MBD.STM)
-    nStates::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
-    G::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(1.0, 0, 0, 0, 0, 0, 0, -1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, -1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, -1.0)
-    Omega::StaticArrays.SMatrix{3, 3, Float64} = StaticArrays.SMatrix{3, 3, Float64}(0, -1.0, 0, 1.0, 0, 0, 0, 0, 0)
-    A::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}([zeros(Float64, (3,3)) -1 .*LinearAlgebra.I; LinearAlgebra.I -2 .*Omega])
-    B::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}([-2 .*Omega LinearAlgebra.I; -1 .*LinearAlgebra.I zeros(Float64, (3,3))])
+    propagator = MBD.Propagator()
     if abs(familyData[index,paramName]-paramValue) <= 1E-8
         println("Orbit already exists in database!")
         orbitData::DataFrames.DataFrameRow = familyData[index,:]
         initialCondition::Vector{Float64} = [orbitData[p] for p in ["x", "y", "z", "xdot", "ydot", "zdot"]]
         period::Float64 = orbitData["Period"]
-        halfOrbit::MBD.CR3BPArc = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, initialCondition, MBD.STM), [0, period/2], targeter.dynamicsModel)
-        PCState::StaticArrays.SVector{nStates, Float64} = StaticArrays.SVector{nStates, Float64}(getStateByIndex(halfOrbit, -1))
-        PCSTM::StaticArrays.SMatrix{6, 6, Float64} = StaticArrays.SMatrix{6, 6, Float64}(reshape(PCState[7:42], (6,6)))
-        monodromy::Matrix{Float64} = G*A*(PCSTM')*B*G*PCSTM
-        orbit = MBD.CR3BPPeriodicOrbit(targeter.dynamicsModel, initialCondition, period, monodromy)
+        JC::Float64 = orbitData["JC"]
+        guessArc::MBD.CR3BPArc = propagate(propagator, initialCondition, [0, period/2], targeter.dynamicsModel)
+        numStates::Int64 = getStateCount(guessArc)
+        indices::Vector{Int64} = round.(Int64, range(1, numStates, numNodes))
+        stateGuesses::Vector{Vector{Float64}} = [getStateByIndex(guessArc, indices[i]) for i = eachindex(indices)]
+        timeGuesses::Vector{Float64} = [getTimeByIndex(guessArc, indices[i]) for i = eachindex(indices)]
+        solution::MBD.CR3BPMultipleShooterProblem = correct(targeter, stateGuesses, timeGuesses, numNodes, JC; tol, JTol)
+        period = getPeriod(targeter, solution)
+        orbitStates::Vector{Vector{Float64}} = append!([solution.nodes[n].state.data[1:6] for n = 1:numNodes-1], [solution.nodes[n].state.data[1:6].*[1, -1, 1, -1, 1, -1] for n = numNodes:-1:1])
+        orbitTimes::Vector{Float64} = append!([solution.nodes[n].epoch.data[1] for n = 1:numNodes-1], [period-solution.nodes[n].epoch.data[1] for n = numNodes:-1:1]) 
+        orbit = MBD.CR3BPMSPeriodicOrbit(targeter.dynamicsModel, orbitStates, orbitTimes, period, getMonodromy(targeter, solution))
     else
         println("Orbit does not already exist in database; attempting bisection...")
         lowerBound::Int16 = index-Int16(1)
@@ -251,16 +252,15 @@ function interpOrbit(targeter::SpatialPerpJCMSTargeter, fileName::String, paramN
         currentError::Float64 = abs(lowerData[paramName]-paramValue)
         iter::Int16 = Int16(1)
         while (currentError > 1E-8) && (iter <= 20)
-            simplePropagator = MBD.Propagator()
-            guessArc::MBD.CR3BPArc = propagate(simplePropagator, midInitialCondition, [0, midPeriod/2], targeter.dynamicsModel)
-            numStates::Int64 = getStateCount(guessArc)
-            indices::Vector{Int64} = round.(Int64, range(1, numStates, numNodes))
-            stateGuesses::Vector{Vector{Float64}} = [getStateByIndex(guessArc, indices[i]) for i = eachindex(indices)]
-            timeGuesses::Vector{Float64} = [getTimeByIndex(guessArc, indices[i]) for i = eachindex(indices)]
-            midSolution::MBD.CR3BPMultipleShooterProblem = correct(targeter, stateGuesses, timeGuesses, numNodes, midJC; tol, JTol)
-            newInitialCondition::Vector{Float64} = midSolution.nodes[1].state.data[1:6]
-            newPeriod::Float64 = getPeriod(targeter, midSolution)
-            newMonodromy::Matrix{Float64} = getMonodromy(targeter, midSolution)
+            guessArc = propagate(propagator, midInitialCondition, [0, midPeriod/2], targeter.dynamicsModel)
+            numStates = getStateCount(guessArc)
+            indices = round.(Int64, range(1, numStates, numNodes))
+            stateGuesses = [getStateByIndex(guessArc, indices[i]) for i = eachindex(indices)]
+            timeGuesses = [getTimeByIndex(guessArc, indices[i]) for i = eachindex(indices)]
+            solution = correct(targeter, stateGuesses, timeGuesses, numNodes, midJC; tol, JTol)
+            newInitialCondition::Vector{Float64} = solution.nodes[1].state.data[1:6]
+            newPeriod::Float64 = getPeriod(targeter, solution)
+            newMonodromy::Matrix{Float64} = getMonodromy(targeter, solution)
             newJC::Float64 = getJacobiConstant(targeter.dynamicsModel, newInitialCondition)
             newEigenvalues::Vector{Complex{Float64}} = LinearAlgebra.eigen(newMonodromy).values
             newStabilityIndex::Float64 = LinearAlgebra.norm(newEigenvalues, Inf)
@@ -276,11 +276,10 @@ function interpOrbit(targeter::SpatialPerpJCMSTargeter, fileName::String, paramN
             iter += Int16(1)
         end
         (iter > 50) && throw(ErrorException("Bisection failed"))
-        halfOrbit = propagate(propagator, appendExtraInitialConditions(targeter.dynamicsModel, midInitialCondition, MBD.STM), [0, midPeriod/2], targeter.dynamicsModel)
-        PCState = StaticArrays.SVector{nStates, Float64}(getStateByIndex(halfOrbit, -1))
-        PCSTM = StaticArrays.SMatrix{6, 6, Float64}(reshape(PCState[7:42], (6,6)))
-        monodromy = G*A*(PCSTM')*B*G*PCSTM
-        orbit = MBD.CR3BPPeriodicOrbit(targeter.dynamicsModel, midInitialCondition, midPeriod, monodromy)
+        period = getPeriod(targeter, solution)
+        orbitStates = append!([solution.nodes[n].state.data[1:6] for n = 1:numNodes-1], [solution.nodes[n].state.data[1:6].*[1, -1, 1, -1, 1, -1] for n = numNodes:-1:1])
+        orbitTimes = append!([solution.nodes[n].epoch.data[1] for n = 1:numNodes-1], [period-solution.nodes[n].epoch.data[1] for n = numNodes:-1:1]) 
+        orbit = MBD.CR3BPMSPeriodicOrbit(targeter.dynamicsModel, orbitStates, orbitTimes, period, getMonodromy(targeter, solution))
     end
 
     return orbit
