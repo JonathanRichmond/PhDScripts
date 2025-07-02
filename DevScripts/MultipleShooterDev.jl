@@ -3,7 +3,7 @@ Script for multiple shooter code development
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 6/24/25
+U: 7/2/25
 """
 module MSDev
 println()
@@ -23,10 +23,10 @@ LagrangePoints::Vector{Vector{Float64}} = [getEquilibriumPoint(dynamicsModel, l)
 propagator = MBD.Propagator()
 targeter = SpatialPerpJCMSTargeter(dynamicsModel)
 
-initialStateGuess::Vector{Float64} = [0.67, 0.0, 0.0, 0.0, 0.62, 0.0] # [0.881995, 0, -0.24036, 0, 0.144858, 0]
-periodGuess::Float64 = 11.3 # 20.3756
-targetJC::Float64 = 3.0476175370795078 # 2.9833
-numSegs::Int64 = 6 # 28
+initialStateGuess::Vector{Float64} = [0.881995, 0, -0.24036, 0, 0.144858, 0]
+periodGuess::Float64 = 20.3756
+targetJC::Float64 = 2.9833
+numSegs::Int64 = 28
 
 tPCGuess::Float64 = periodGuess/2
 guessArc::MBD.CR3BPArc = propagate(propagator, initialStateGuess, [0, tPCGuess], dynamicsModel)
