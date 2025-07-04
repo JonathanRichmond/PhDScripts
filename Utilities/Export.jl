@@ -3,7 +3,7 @@ Export utility functions
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 7/2/25
+U: 7/4/25
 """
 
 using MBD, CSV, DataFrames, LinearAlgebra, MATLAB
@@ -51,7 +51,7 @@ struct BCR4BP12Orb
 end
 
 """
-    BCR4BP12Traj(x, y, z, xdot, ydot, zdot, theta4, t, H)
+    BCR4BP12Traj(x, y, z, xdot, ydot, zdot, theta4, t, H, TOF)
 
 BCR4BP P1-P2 trajectory export object
 
@@ -65,9 +65,11 @@ BCR4BP P1-P2 trajectory export object
 - `theta4::Vector{Float64}`: theta4 data [ndim]
 - `t::Vector{Float64}`: Time data [ndim]
 - `H::Vector{Float64}`: Hamiltonian data [ndim]
+- `TOF::Float64`: Time-of-flight [ndim]
 """
 struct BCR4BP12Traj
     H::Vector{Float64}                                                  # Hamiltonian data [ndim]
+    TOF::Float64                                                        # Time-of-flight [ndim]
     t::Vector{Float64}                                                  # Time data [ndim]
     theta4::Vector{Float64}                                             # theta4 data [ndim]
     x::Vector{Float64}                                                  # x data [ndim]
@@ -77,8 +79,8 @@ struct BCR4BP12Traj
     z::Vector{Float64}                                                  # z data [ndim]
     zdot::Vector{Float64}                                               # zdot data [ndim]
 
-    function BCR4BP12Traj(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta4::Vector{Float64}, t::Vector{Float64}, H::Vector{Float64})
-        this = new(H, t, theta4, x, xdot, y, ydot, z, zdot)
+    function BCR4BP12Traj(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta4::Vector{Float64}, t::Vector{Float64}, H::Vector{Float64}, TOF::Float64)
+        this = new(H, TOF, t, theta4, x, xdot, y, ydot, z, zdot)
 
         return this
     end
@@ -108,7 +110,7 @@ struct BCR4BP12Man
 end
 
 """
-    BCR4BP41Traj(x, y, z, xdot, ydot, zdot, theta2, t, H)
+    BCR4BP41Traj(x, y, z, xdot, ydot, zdot, theta2, t, H, TOF)
 
 BCR4BP P4-B1 trajectory export object
 
@@ -122,9 +124,11 @@ BCR4BP P4-B1 trajectory export object
 - `theta2::Vector{Float64}`: theta2 data [ndim]
 - `t::Vector{Float64}`: Time data [ndim]
 - `H::Vector{Float64}`: Hamiltonian data [ndim]
+- `TOF::Float64`: Time-of-flight [ndim]
 """
 struct BCR4BP41Traj
     H::Vector{Float64}                                                  # Hamiltonian data [ndim]
+    TOF::Float64                                                        # Time-of-flight [ndim]
     t::Vector{Float64}                                                  # Time data [ndim]
     theta2::Vector{Float64}                                             # theta2 data [ndim]
     x::Vector{Float64}                                                  # x data [ndim]
@@ -134,8 +138,8 @@ struct BCR4BP41Traj
     z::Vector{Float64}                                                  # z data [ndim]
     zdot::Vector{Float64}                                               # zdot data [ndim]
 
-    function BCR4BP41Traj(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta2::Vector{Float64}, t::Vector{Float64}, H::Vector{Float64})
-        this = new(H, t, theta2, x, xdot, y, ydot, z, zdot)
+    function BCR4BP41Traj(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta2::Vector{Float64}, t::Vector{Float64}, H::Vector{Float64}, TOF::Float64)
+        this = new(H, TOF, t, theta2, x, xdot, y, ydot, z, zdot)
 
         return this
     end
@@ -178,7 +182,7 @@ struct CR3BPOrb
 end
 
 """
-    CR3BPTraj(x, y, z, xdot, ydot, zdot, t, JC)
+    CR3BPTraj(x, y, z, xdot, ydot, zdot, t, TOF, JC)
 
 CR3BP trajectory export object
 
@@ -190,10 +194,12 @@ CR3BP trajectory export object
 - `ydot::Vector{Float64}`: ydot data [ndim]
 - `zdot::Vector{Float64}`: zdot data [ndim]
 - `t::Vector{Float64}`: Time data [ndim]
+- `TOF::Float64`: Time-of-flight [ndim]
 - `JC::Float64`: Jacobi constant
 """
 struct CR3BPTraj
     JC::Float64                                                         # Jacobi constant
+    TOF::Float64                                                        # Time-of-flight [ndim]
     t::Vector{Float64}                                                  # Time data [ndim]
     x::Vector{Float64}                                                  # x data [ndim]
     xdot::Vector{Float64}                                               # xdot data [ndim]
@@ -202,8 +208,44 @@ struct CR3BPTraj
     z::Vector{Float64}                                                  # z data [ndim]
     zdot::Vector{Float64}                                               # zdot data [ndim]
 
-    function CR3BPTraj(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, t::Vector{Float64}, JC::Float64)
-        this = new(JC, t, x, xdot, y, ydot, z, zdot)
+    function CR3BPTraj(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, t::Vector{Float64}, TOF::Float64, JC::Float64)
+        this = new(JC, TOF, t, x, xdot, y, ydot, z, zdot)
+
+        return this
+    end
+end
+
+"""
+    CR3BPOrbFam(orbits)
+
+CR3BP obit family export object
+
+# Arguments
+- `orbits::Vector{CR3BPOrb}`: CR3BP periodic orbit export objects
+"""
+struct CR3BPOrbFam
+    orbits::Vector{CR3BPOrb}                                            # Periodic orbit export objects
+
+    function CR3BPOrbFam(orbits::Vector{CR3BPOrb})
+        this = new(orbits)
+
+        return this
+    end
+end
+
+"""
+    CR3BPTrajFam(trajs)
+
+CR3BP trajectory family export object
+
+# Arguments
+- `trajs::Vector{CR3BPTraj}`: CR3BP trajectory export objects
+"""
+struct CR3BPTrajFam
+    trajs::Vector{CR3BPTraj}                                            # Trajectory export objects
+
+    function CR3BPTrajFam(trajs::Vector{CR3BPTraj})
+        this = new(trajs)
 
         return this
     end
@@ -233,7 +275,7 @@ struct CR3BPMan
 end
 
 """
-    InertialTraj(x, y, z, xdot, ydot, zdot, t)
+    InertialTraj(x, y, z, xdot, ydot, zdot, t, TOF)
 
 Inertial trajectory export object
 
@@ -245,8 +287,10 @@ Inertial trajectory export object
 - `ydot::Vector{Float64}`: ydot data [ndim]
 - `zdot::Vector{Float64}`: zdot data [ndim]
 - `t::Vector{Float64}`: Time data [ndim]
+- `TOF::Float64`: Time-of-flight [ndim]
 """
 struct InertialTraj
+    TOF::Float64                                                        # Time-of-flight [ndim]
     t::Vector{Float64}                                                  # Time data [ndim]
     x::Vector{Float64}                                                  # x data [ndim]
     xdot::Vector{Float64}                                               # xdot data [ndim]
@@ -255,8 +299,8 @@ struct InertialTraj
     z::Vector{Float64}                                                  # z data [ndim]
     zdot::Vector{Float64}                                               # zdot data [ndim]
 
-    function InertialTraj(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, t::Vector{Float64})
-        this = new(t, x, xdot, y, ydot, z, zdot)
+    function InertialTraj(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, t::Vector{Float64}, TOF::Float64)
+        this = new(TOF, t, x, xdot, y, ydot, z, zdot)
 
         return this
     end
@@ -612,11 +656,11 @@ function exportBCR4BP12Trajectory(x0::Float64, y0::Float64, z0::Float64, xdot0::
         t[s] = getTimeByIndex(arc, s)
         H[s] = getHamiltonian(dynamicsModel, state)
     end
-    exportBCR4BP12Trajectory(x, y, z, xdot, ydot, zdot, theta4, t, H, file, name)
+    exportBCR4BP12Trajectory(x, y, z, xdot, ydot, zdot, theta4, t, H, propTime, file, name)
 end
 
 """
-    exportBCR4BP12Trajectory(x, y, z, xdot, ydot, zdot, theta4, t, H, file, name)
+    exportBCR4BP12Trajectory(x, y, z, xdot, ydot, zdot, theta4, t, H, TOF, file, name)
 
 Export BCR4BP P1-P2 trajectory data to MAT file
 
@@ -630,11 +674,12 @@ Export BCR4BP P1-P2 trajectory data to MAT file
 - `theta4::Vector{Float64}`: theta4 data [ndim]
 - `t::Vector{Float64}`: Time data [ndim]
 - `H::Vector{Float64}`: Hamiltonian data [ndim]
+- `TOF::Float64`: Time-of-flight [ndim]
 - `file::MatFile`: MAT file
 - `name::Symbol`: Export object name
 """
-function exportBCR4BP12Trajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta4::Vector{Float64}, t::Vector{Float64}, H::Vector{Float64}, file::MATLAB.MatFile, name::Symbol)
-    traj = BCR4BP12Traj(x, y, z, xdot, ydot, zdot, theta4, t, H)
+function exportBCR4BP12Trajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta4::Vector{Float64}, t::Vector{Float64}, H::Vector{Float64}, TOF::Float64, file::MATLAB.MatFile, name::Symbol)
+    traj = BCR4BP12Traj(x, y, z, xdot, ydot, zdot, theta4, t, H, TOF)
     MATLAB.put_variable(file, name, traj)
 end
 
@@ -681,11 +726,11 @@ function exportBCR4BP41Trajectory(x0::Float64, y0::Float64, z0::Float64, xdot0::
         t[s] = getTimeByIndex(arc, s)
         H[s] = getHamiltonian(dynamicsModel, state)
     end
-    exportBCR4BP41Trajectory(x, y, z, xdot, ydot, zdot, theta2, t, H, file, name)
+    exportBCR4BP41Trajectory(x, y, z, xdot, ydot, zdot, theta2, t, H, TOF, file, name)
 end
 
 """
-    exportBCR4BP41Trajectory(x, y, z, xdot, ydot, zdot, theta2, t, H, file, name)
+    exportBCR4BP41Trajectory(x, y, z, xdot, ydot, zdot, theta2, t, H, TOF, file, name)
 
 Export BCR4BP P4-B1 trajectory data to MAT file
 
@@ -699,11 +744,12 @@ Export BCR4BP P4-B1 trajectory data to MAT file
 - `theta2::Vector{Float64}`: theta2 data [ndim]
 - `t::Vector{Float64}`: Time data [ndim]
 - `H::Vector{Float64}`: Hamiltonian data [ndim]
+- `TOF::Float64`: Time-of-flight [ndim]
 - `file::MatFile`: MAT file
 - `name::Symbol`: Export object name
 """
-function exportBCR4BP41Trajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta2::Vector{Float64}, t::Vector{Float64}, H::Vector{Float64}, file::MATLAB.MatFile, name::Symbol)
-    traj = BCR4BP41Traj(x, y, z, xdot, ydot, zdot, theta2, t, H)
+function exportBCR4BP41Trajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta2::Vector{Float64}, t::Vector{Float64}, H::Vector{Float64}, TOF::Float64, file::MATLAB.MatFile, name::Symbol)
+    traj = BCR4BP41Traj(x, y, z, xdot, ydot, zdot, theta2, t, H, TOF)
     MATLAB.put_variable(file, name, traj)
 end
 
@@ -968,7 +1014,7 @@ function exportCR3BPTrajectory(solution::MBD.CR3BPMultipleShooterProblem, file::
         t[s] = epochs[s]
     end
     JC::Float64 = getJacobiConstant(solution.nodes[1].dynamicsModel, solution.nodes[1].state.data[1:6])
-    exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, JC, file, name)
+    exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, t[end]-t[1], JC, file, name)
 end
 
 """
@@ -1010,11 +1056,11 @@ function exportCR3BPTrajectory(x0::Float64, y0::Float64, z0::Float64, xdot0::Flo
         t[s] = getTimeByIndex(arc, s)
     end
     JC::Float64 = getJacobiConstant(dynamicsModel, [x0, y0, z0, xdot0, ydot0, zdot0])
-    exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, JC, file, name)
+    exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, propTime, JC, file, name)
 end
 
 """
-    exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, JC, file, name)
+    exportCR3BPTrajectory(x, y, z, xdot, ydot, zdot, t, TOF, JC, file, name)
 
 Export CR3BP trajectory data to MAT file
 
@@ -1026,12 +1072,13 @@ Export CR3BP trajectory data to MAT file
 - `ydot::Vector{Float64}`: ydot data [ndim]
 - `zdot::Vector{Float64}`: zdot data [ndim]
 - `t::Vector{Float64}`: Time data [ndim]
+- `TOF::Float64`: Time-of-flight [ndim]
 - `JC::Float64`: Jacobi constant
 - `file::MatFile`: MAT file
 - `name::Symbol`: Export object name
 """
-function exportCR3BPTrajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, t::Vector{Float64}, JC::Float64, file::MATLAB.MatFile, name::Symbol)
-    traj = CR3BPTraj(x, y, z, xdot, ydot, zdot, t, JC)
+function exportCR3BPTrajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, t::Vector{Float64}, TOF::Float64, JC::Float64, file::MATLAB.MatFile, name::Symbol)
+    traj = CR3BPTraj(x, y, z, xdot, ydot, zdot, t, TOF, JC)
     MATLAB.put_variable(file, name, traj)
 end
 
@@ -1063,11 +1110,11 @@ function exportInertialTrajectory(states::Vector{Vector{Float64}}, times::Vector
         ydot[s] = state[5]
         zdot[s] = state[6]
     end
-    exportInertialTrajectory(x, y, z, xdot, ydot, zdot, times, file, name)
+    exportInertialTrajectory(x, y, z, xdot, ydot, zdot, times, times[end]-times[1], file, name)
 end
 
 """
-    exportInertialTrajectory(x, y, z, xdot, ydot, zdot, t, file, name)
+    exportInertialTrajectory(x, y, z, xdot, ydot, zdot, t, TOF, file, name)
 
 Export inertial trajectory data to MAT file
 
@@ -1079,11 +1126,12 @@ Export inertial trajectory data to MAT file
 - `ydot::Vector{Float64}`: ydot data [ndim]
 - `zdot::Vector{Float64}`: zdot data [ndim]
 - `t::Vector{Float64}`: Time data [ndim]
+- `TOF::Float64`: Time-of-flight [ndim]
 - `file::MatFile`: MAT file
 - `name::Symbol`: Export object name
 """
-function exportInertialTrajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, t::Vector{Float64}, file::MATLAB.MatFile, name::Symbol)
-    traj = InertialTraj(x, y, z, xdot, ydot, zdot, t)
+function exportInertialTrajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, t::Vector{Float64}, TOF::Float64, file::MATLAB.MatFile, name::Symbol)
+    traj = InertialTraj(x, y, z, xdot, ydot, zdot, t, TOF)
     MATLAB.put_variable(file, name, traj)
 end
 
@@ -1217,7 +1265,7 @@ function exportPseudoManifold(pseudoManifold::MBD.BCR4BPPseudoManifold, pseudoMa
 end
 
 """
-    fullExportCR3BPFamily(family, MATFile, CSVFile)
+    fullExportCR3BPFamily(family, MATFile, CSVFile, name)
 
 Export CR3BP family data to MAT and CSV files
 
@@ -1225,16 +1273,17 @@ Export CR3BP family data to MAT and CSV files
 - `family::CR3BPOrbitFamily`: CR3BP periodic orbit family object
 - `MATFile::String`: MAT file name
 - `CSVFile::String`: CSV file name
+- `name::Symbol`: Export object name
 """
-function fullExportCR3BPFamily(family::MBD.CR3BPOrbitFamily, MATFile::String, CSVFile::String)
+function fullExportCR3BPFamily(family::MBD.CR3BPOrbitFamily, MATFile::String, CSVFile::String, name::Symbol)
     mf = MATLAB.MatFile(MATFile, "w")
-    MATExportCR3BPFamily(family, mf)
+    MATExportCR3BPFamily(family, mf, name)
     MATLAB.close(mf)
     CSVExportCR3BPFamily(family, CSVFile)
 end
 
 """
-    fullExportCR3BPFamily(family, MATFile, CSVFile)
+    fullExportCR3BPFamily(family, MATFile, CSVFile, name)
 
 Export CR3BP family data to MAT and CSV files
 
@@ -1242,45 +1291,113 @@ Export CR3BP family data to MAT and CSV files
 - `family::CR3BPContinuationFamily`: CR3BP trajectory continuation family object
 - `MATFile::String`: MAT file name
 - `CSVFile::String`: CSV file name
+- `name::Symbol`: Export object name
 """
-function fullExportCR3BPFamily(family::MBD.CR3BPContinuationFamily, MATFile::String, CSVFile::String)
+function fullExportCR3BPFamily(family::MBD.CR3BPContinuationFamily, MATFile::String, CSVFile::String, name::Symbol)
     mf = MATLAB.MatFile(MATFile, "w")
-    MATExportCR3BPFamily(family, mf)
+    MATExportCR3BPFamily(family, mf, name)
     MATLAB.close(mf)
     CSVExportCR3BPFamily(family, CSVFile)
 end
 
 """
-    MATExportCR3BPFamily(family, file)
+    MATExportCR3BPFamily(family, file, name)
 
 Export CR3BP family data to MAT file
 
 # Arguments
 - `family::CR3BPOrbitFamily`: CR3BP periodic orbit family object
 - `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
 """
-function MATExportCR3BPFamily(family::MBD.CR3BPOrbitFamily, file::MATLAB.MatFile)
+function MATExportCR3BPFamily(family::MBD.CR3BPOrbitFamily, file::MATLAB.MatFile, name::Symbol)
+    orbits::Vector{CR3BPOrb} = Vector{CR3BPOrb}(undef, getNumMembers(family))
     for o::Int64 = 1:getNumMembers(family)
         orbit::MBD.CR3BPPeriodicOrbit = getMember(family, o)
-        exportCR3BPOrbit(orbit, file, Symbol("orbit"*string(o)))
+        propagator = MBD.Propagator()
+        orbitStates::Vector{Vector{Float64}} = []
+        orbitEpochs::Vector{Float64} = []
+        for n::Int64 in 1:length(orbit.nodeEpochs)-1
+            arc::MBD.CR3BPArc = propagate(propagator, orbit.nodeStates[n], [orbit.nodeEpochs[n], orbit.nodeEpochs[n+1]], orbit.dynamicsModel)
+            append!(orbitStates, arc.states)
+            append!(orbitEpochs, arc.times)
+        end
+        nStates::Int64 = length(orbitEpochs)
+        x::Vector{Float64} = zeros(Float64, nStates)
+        y::Vector{Float64} = zeros(Float64, nStates)
+        z::Vector{Float64} = zeros(Float64, nStates)
+        xdot::Vector{Float64} = zeros(Float64, nStates)
+        ydot::Vector{Float64} = zeros(Float64, nStates)
+        zdot::Vector{Float64} = zeros(Float64, nStates)
+        t::Vector{Float64} = zeros(Float64, nStates)
+        for s::Int64 in 1:nStates
+            state::Vector{Float64} = orbitStates[s]
+            x[s] = state[1]
+            y[s] = state[2]
+            z[s] = state[3]
+            xdot[s] = state[4]
+            ydot[s] = state[5]
+            zdot[s] = state[6]
+            t[s] = orbitEpochs[s]
+        end
+        JC::Float64 = getJacobiConstant(orbit)
+        varsig::Float64 = getStabilityIndex(orbit)
+        orbits[o] = CR3BPOrb(x, y, z, xdot, ydot, zdot, t, orbit.period, JC, varsig)
     end
+    fam = CR3BPOrbFam(orbits)
+    MATLAB.put_variable(file, name, fam)
 end
 
 """
-    MATExportCR3BPFamily(family, file)
+    MATExportCR3BPFamily(family, file, name)
 
 Export CR3BP family data to MAT file
 
 # Arguments
 - `family::CR3BPContinuationFamily`: CR3BP trajectory continuation family object
 - `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
 """
-function MATExportCR3BPFamily(family::MBD.CR3BPContinuationFamily, file::MATLAB.MatFile)
-    for t::Int64 = 1:getNumMembers(family)
+function MATExportCR3BPFamily(family::MBD.CR3BPContinuationFamily, file::MATLAB.MatFile, name::Symbol)
+    trajs::Vector{CR3BPTraj} = Vector{CR3BPTraj}(undef, getNumMembers(family))
+    for m::Int64 = 1:getNumMembers(family)
         solution = MBD.CR3BPMultipleShooterProblem()
-        numNodes::Int64 = length(family.nodes[t])
-        solution.nodes = [MBD.shallowClone(family.nodes[t][n]) for n = 1:numNodes]
-        solution.segments = [MBD.shallowClone(family.segments[t][s]) for s = 1:numNodes-1]
-        exportCR3BPTrajectory(solution, file, Symbol("orbit"*string(t)))
+        numNodes::Int64 = length(family.nodes[m])
+        solution.nodes = [MBD.shallowClone(family.nodes[m][n]) for n = 1:numNodes]
+        solution.segments = [MBD.shallowClone(family.segments[m][s]) for s = 1:numNodes-1]
+        propagator = MBD.Propagator()
+        states::Vector{Vector{Float64}} = []
+        epochs::Vector{Float64} = []
+        for n::Int64 in 1:length(solution.nodes)-1
+            arc::MBD.CR3BPArc = propagate(propagator, solution.nodes[n].state.data[1:6], [solution.nodes[n].epoch.data[1], solution.nodes[n+1].epoch.data[1]], solution.nodes[1].dynamicsModel)
+            append!(states, arc.states)
+            append!(epochs, arc.times)
+        end
+        nStates::Int64 = length(epochs)
+        x::Vector{Float64} = zeros(Float64, nStates)
+        y::Vector{Float64} = zeros(Float64, nStates)
+        z::Vector{Float64} = zeros(Float64, nStates)
+        xdot::Vector{Float64} = zeros(Float64, nStates)
+        ydot::Vector{Float64} = zeros(Float64, nStates)
+        zdot::Vector{Float64} = zeros(Float64, nStates)
+        t::Vector{Float64} = zeros(Float64, nStates)
+        for s::Int64 in 1:nStates
+            state::Vector{Float64} = states[s]
+            x[s] = state[1]
+            y[s] = state[2]
+            z[s] = state[3]
+            xdot[s] = state[4]
+            ydot[s] = state[5]
+            zdot[s] = state[6]
+            t[s] = epochs[s]
+        end
+        TOF::Float64 = 0.0
+        for s::Int64 = 1:length(solution.segments)
+            TOF += solution.segments[s].TOF.data[1]
+        end
+        JC::Float64 = getJacobiConstant(solution.nodes[1].dynamicsModel, solution.nodes[1].state.data[1:6])
+        trajs[m] = CR3BPTraj(x, y, z, xdot, ydot, zdot, t, TOF, JC)
     end
+    fam = CR3BPTrajFam(trajs)
+    MATLAB.put_variable(file, name, fam)
 end

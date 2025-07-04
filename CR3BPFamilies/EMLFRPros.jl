@@ -3,6 +3,7 @@ Script for Earth-Moon CR3BP lunar free return prograde orbit family
 
 Author: Jonathan Richmond
 C: 7/1/25
+U: 7/3/25
 """
 module EMLFRPro
 println()
@@ -53,7 +54,7 @@ lastTransfer::MBD.CR3BPMultipleShooterProblem = getIndividualSolution(targeter, 
 println("Last Converged Transfer:\n\tIC:\t$(lastTransfer.nodes[1].state.data[1:6])\n\tTOF:\t$(getTOF(targeter, lastTransfer))\n\tJC:\t$(getJacobiConstant(dynamicsModel, lastTransfer.nodes[1].state.data[1:6]))\n")
 
 # println("\nExporting family data...")
-# fullExportCR3BPFamily(solutions, "FamilyData/CR3BPEMLFRPros.mat", "FamilyData/CR3BPEMLFRPros.csv")
+# fullExportCR3BPFamily(solutions, "FamilyData/CR3BPEMLFRPros.mat", "FamilyData/CR3BPEMLFRPros.csv", :LFRPros)
 
 # println("\nTesting interpolation...")
 # testTransfer::MBD.CR3BPMultipleShooterProblem = interpSolution(targeter, "FamilyData/CR3BPEMLFRPros.csv", "x", 1.07, numNodes, h_E/getCharLength(systemData), gamma)
