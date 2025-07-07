@@ -4,7 +4,7 @@ Script for Earth-Moon CR3BP 3:2 prograde spatial resonant orbit family
 
 Author: Jonathan Richmond
 C: 7/1/25
-U: 7/2/25
+U: 7/7/25
 """
 module EMRes32ProSpat
 println()
@@ -53,7 +53,7 @@ end
 eigenSort!(family)
 
 # println("\nExporting family data...")
-# fullExportCR3BPFamily(family, "FamilyData/CR3BPEMResonant3_2ProsSpatial.mat", "FamilyData/CR3BPEMResonant3_2ProsSpatial.csv")
+# fullExportCR3BPFamily(family, "FamilyData/CR3BPEMResonant3_2ProsSpatial.mat", "FamilyData/CR3BPEMResonant3_2ProsSpatial.csv", :Resonant3_2ProsSpatial)
 
 # println("\nTesting interpolation...")
 # testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEMResonant3_2ProsSpatial.csv", "JC", 3.0)

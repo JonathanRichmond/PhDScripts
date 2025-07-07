@@ -3,7 +3,7 @@ Script for Earth-Moon CR3BP cycler orbit family
 
 Author: Jonathan Richmond
 C: 6/30/25
-U: 7/2/25
+U: 7/7/25
 """
 module EMCycler
 println()
@@ -36,7 +36,7 @@ println("Continuing orbits...")
 continuationEngine = MBD.CR3BPNaturalParameterContinuationEngine(solution1, solution2, "Half Period", 1, 1E-4, 1E-2)
 ydot0JumpCheck = MBD.BoundingBoxJumpCheck("Initial State", [NaN NaN; 0 0.5])
 addJumpCheck!(continuationEngine, ydot0JumpCheck)
-numStepsEndCheck = MBD.NumberStepsContinuationEndCheck(2500)
+numStepsEndCheck = MBD.NumberStepsContinuationEndCheck(2250)
 addEndCheck!(continuationEngine, numStepsEndCheck)
 family = MBD.CR3BPOrbitFamily(dynamicsModel)
 solutions::MBD.CR3BPContinuationFamily = doContinuation!(continuationEngine, solution1, solution2)
@@ -52,7 +52,7 @@ end
 eigenSort!(family)
 
 # println("\nExporting family data...")
-# fullExportCR3BPFamily(family, "FamilyData/CR3BPEMCyclers.mat", "FamilyData/CR3BPEMCyclers.csv")
+# fullExportCR3BPFamily(family, "FamilyData/CR3BPEMCyclers.mat", "FamilyData/CR3BPEMCyclers.csv", :Cyclers)
 
 # println("\nTesting interpolation...")
 # testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEMCyclers.csv", "JC", 3.1)

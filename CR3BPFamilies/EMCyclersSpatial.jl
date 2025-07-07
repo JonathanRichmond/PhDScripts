@@ -3,6 +3,7 @@ Script for Earth-Moon CR3BP spatial cycler orbit family
 
 Author: Jonathan Richmond
 C: 7/2/25
+U: 7/7/25
 """
 module EMCyclerSpat
 println()
@@ -45,7 +46,7 @@ z0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [NaN NaN; -0.2 0; NaN NaN
 addJumpCheck!(continuationEngine, z0JumpCheck)
 numStepsEndCheck = MBD.NumberStepsContinuationEndCheck(1000)
 addEndCheck!(continuationEngine, numStepsEndCheck)
-family = MBD.CR3BPOrbitFamily(dynamicsModel)
+family = MBD.CR3BPMSOrbitFamily(dynamicsModel)
 solutions::MBD.CR3BPContinuationFamily = doContinuation!(continuationEngine, solution1, solution2)
 lastOrbit::MBD.CR3BPMSPeriodicOrbit = getIndividualPeriodicOrbit(targeter, solutions, getNumMembers(solutions))
 println("Last Converged Orbit:\n\tIC:\t$(lastOrbit.initialCondition)\n\tP:\t$(lastOrbit.period)\n\tJC:\t$(getJacobiConstant(lastOrbit))\n")
@@ -55,11 +56,13 @@ for s::Int64 in 1:getNumMembers(solutions)
     push!(family.initialConditions, orbit.initialCondition)
     push!(family.periods, orbit.period)
     push!(family.monodromies, orbit.monodromy)
+    push!(family.nodeStates, orbit.nodeStates)
+    push!(family.nodeEpochs, orbit.nodeEpochs)
 end
 eigenSort!(family)
 
 # println("\nExporting family data...")
-# fullExportCR3BPFamily(family, "FamilyData/CR3BPEMCyclersSpatial.mat", "FamilyData/CR3BPEMCyclersSpatial.csv")
+# fullExportCR3BPFamily(family, "FamilyData/CR3BPEMCyclersSpatial.mat", "FamilyData/CR3BPEMCyclersSpatial.csv", :CyclersSpatial)
 
 # println("\nTesting interpolation...")
 # testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEMCyclersSpatial.csv", "JC", 3.1, numNodes)

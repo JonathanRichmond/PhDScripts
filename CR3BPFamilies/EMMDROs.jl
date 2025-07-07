@@ -3,7 +3,7 @@ Script for Earth-Moon CR3BP Moon distant retrograde orbit family
 
 Author: Jonathan Richmond
 C: 6/30/25
-U: 7/2/25
+U: 7/7/25
 """
 module EMMDRO
 println()
@@ -51,7 +51,7 @@ end
 eigenSort!(family)
 
 # println("\nExporting family data...")
-# fullExportCR3BPFamily(family, "FamilyData/CR3BPEMMDROs.mat", "FamilyData/CR3BPEMMDROs.csv")
+# fullExportCR3BPFamily(family, "FamilyData/CR3BPEMMDROs.mat", "FamilyData/CR3BPEMMDROs.csv", :MDROs)
 
 # println("\nTesting interpolation...")
 # testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEMMDROs.csv", "JC", 3.0)

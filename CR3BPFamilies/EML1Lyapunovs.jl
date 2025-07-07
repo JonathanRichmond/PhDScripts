@@ -3,7 +3,7 @@ Script for Earth-Moon CR3BP L1 Lyapunov orbit family
 
 Author: Jonathan Richmond
 C: 2/4/25
-U: 7/2/25
+U: 7/7/25
 """
 module EML1Lyap
 println()
@@ -52,7 +52,7 @@ end
 eigenSort!(family)
 
 # println("\nExporting family data...")
-# fullExportCR3BPFamily(family, "FamilyData/CR3BPEML1Lyapunovs.mat", "FamilyData/CR3BPEML1Lyapunovs.csv")
+# fullExportCR3BPFamily(family, "FamilyData/CR3BPEML1Lyapunovs.mat", "FamilyData/CR3BPEML1Lyapunovs.csv", :L1Lyapunovs)
 
 # println("\nTesting interpolation...")
 # testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEML1Lyapunovs.csv", "JC", 3.0)

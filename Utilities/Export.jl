@@ -3,14 +3,15 @@ Export utility functions
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 7/4/25
+U: 7/7/25
 """
 
-using MBD, CSV, DataFrames, LinearAlgebra, MATLAB
+using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, MATLAB
 
 export CSVExportCR3BPFamily, exportBCR4BP12Manifold, exportBCR4BP12Orbit, exportBCR4BP12Trajectory
 export exportBCR4BP41Trajectory, exportCR3BPManifold, exportCR3BPOrbit, exportCR3BPTrajectory
-export exportInertialTrajectory, exportPseudoManifold, fullExportCR3BPFamily, MATExportCR3BPFamily
+export exportInertialTrajectory, exportPseudoManifold, fullExportCR3BPFamily
+export MATExportCR3BPOrbFamily, MATExportCR3BPTrajFamily
 
 """
     BCR4BP12Orb(x, y, z, xdot, ydot, zdot, theta4, t, H, P, varsig)
@@ -352,6 +353,42 @@ function CSVExportCR3BPFamily(family::MBD.CR3BPOrbitFamily, file::String)
     varsig::Vector{Float64} = Vector{Float64}(undef, nMem)
     for o::Int64 = 1:nMem
         orbit::MBD.CR3BPPeriodicOrbit = getMember(family, o)
+        x[o] = orbit.initialCondition[1]
+        y[o] = orbit.initialCondition[2]
+        z[o] = orbit.initialCondition[3]
+        xdot[o] = orbit.initialCondition[4]
+        ydot[o] = orbit.initialCondition[5]
+        zdot[o] = orbit.initialCondition[6]
+        P[o] = orbit.period
+        JC[o] = getJacobiConstant(orbit)
+        varsig[o] = getStabilityIndex(orbit)
+    end
+    familyData::DataFrames.DataFrame = DataFrames.DataFrame("x" => x, "y" => y, "z" => z, "xdot" => xdot, "ydot" => ydot, "zdot" => zdot, "Period" => P, "JC" => JC, "Stability" => varsig)
+    CSV.write(file, familyData)
+end
+
+"""
+    CSVExportCR3BPFamily(family, file)
+
+Export CR3BP family data to CSV file
+
+# Arguments
+- `family::CR3BPMSOrbitFamily`: CR3BP multiple shooter periodic orbit family object
+- `file::String`: CSV file name
+"""
+function CSVExportCR3BPFamily(family::MBD.CR3BPMSOrbitFamily, file::String)
+    nMem::Int64 = getNumMembers(family)
+    x::Vector{Float64} = Vector{Float64}(undef, nMem)
+    y::Vector{Float64} = Vector{Float64}(undef, nMem)
+    z::Vector{Float64} = Vector{Float64}(undef, nMem)
+    xdot::Vector{Float64} = Vector{Float64}(undef, nMem)
+    ydot::Vector{Float64} = Vector{Float64}(undef, nMem)
+    zdot::Vector{Float64} = Vector{Float64}(undef, nMem)
+    P::Vector{Float64} = Vector{Float64}(undef, nMem)
+    JC::Vector{Float64} = Vector{Float64}(undef, nMem)
+    varsig::Vector{Float64} = Vector{Float64}(undef, nMem)
+    for o::Int64 = 1:nMem
+        orbit::MBD.CR3BPMSPeriodicOrbit = getMember(family, o)
         x[o] = orbit.initialCondition[1]
         y[o] = orbit.initialCondition[2]
         z[o] = orbit.initialCondition[3]
@@ -1277,7 +1314,25 @@ Export CR3BP family data to MAT and CSV files
 """
 function fullExportCR3BPFamily(family::MBD.CR3BPOrbitFamily, MATFile::String, CSVFile::String, name::Symbol)
     mf = MATLAB.MatFile(MATFile, "w")
-    MATExportCR3BPFamily(family, mf, name)
+    MATExportCR3BPOrbFamily(family, mf, name)
+    MATLAB.close(mf)
+    CSVExportCR3BPFamily(family, CSVFile)
+end
+
+"""
+    fullExportCR3BPFamily(family, MATFile, CSVFile, name)
+
+Export CR3BP multiple shooter family data to MAT and CSV files
+
+# Arguments
+- `family::CR3BPMSOrbitFamily`: CR3BP multiple shooter periodic orbit family object
+- `MATFile::String`: MAT file name
+- `CSVFile::String`: CSV file name
+- `name::Symbol`: Export object name
+"""
+function fullExportCR3BPFamily(family::MBD.CR3BPMSOrbitFamily, MATFile::String, CSVFile::String, name::Symbol)
+    mf = MATLAB.MatFile(MATFile, "w")
+    MATExportCR3BPOrbFamily(family, mf, name)
     MATLAB.close(mf)
     CSVExportCR3BPFamily(family, CSVFile)
 end
@@ -1295,25 +1350,67 @@ Export CR3BP family data to MAT and CSV files
 """
 function fullExportCR3BPFamily(family::MBD.CR3BPContinuationFamily, MATFile::String, CSVFile::String, name::Symbol)
     mf = MATLAB.MatFile(MATFile, "w")
-    MATExportCR3BPFamily(family, mf, name)
+    MATExportCR3BPTrajFamily(family, mf, name)
     MATLAB.close(mf)
     CSVExportCR3BPFamily(family, CSVFile)
 end
 
 """
-    MATExportCR3BPFamily(family, file, name)
+    MATExportCR3BPOrbFamily(family, file, name)
 
-Export CR3BP family data to MAT file
+Export CR3BP orbit family data to MAT file
 
 # Arguments
 - `family::CR3BPOrbitFamily`: CR3BP periodic orbit family object
 - `file::MatFile`: MAT file
 - `name::Symbol`: Export object name
 """
-function MATExportCR3BPFamily(family::MBD.CR3BPOrbitFamily, file::MATLAB.MatFile, name::Symbol)
+function MATExportCR3BPOrbFamily(family::MBD.CR3BPOrbitFamily, file::MATLAB.MatFile, name::Symbol)
     orbits::Vector{CR3BPOrb} = Vector{CR3BPOrb}(undef, getNumMembers(family))
     for o::Int64 = 1:getNumMembers(family)
         orbit::MBD.CR3BPPeriodicOrbit = getMember(family, o)
+        propagator = MBD.Propagator()
+        arc::MBD.CR3BPArc = propagate(propagator, orbit.initialCondition, [0, orbit.period], orbit.dynamicsModel)
+        nStates::Int64 = length(arc.times)
+        x::Vector{Float64} = zeros(Float64, nStates)
+        y::Vector{Float64} = zeros(Float64, nStates)
+        z::Vector{Float64} = zeros(Float64, nStates)
+        xdot::Vector{Float64} = zeros(Float64, nStates)
+        ydot::Vector{Float64} = zeros(Float64, nStates)
+        zdot::Vector{Float64} = zeros(Float64, nStates)
+        t::Vector{Float64} = zeros(Float64, nStates)
+        for s::Int64 in 1:nStates
+            state::Vector{Float64} = getStateByIndex(arc, s)
+            x[s] = state[1]
+            y[s] = state[2]
+            z[s] = state[3]
+            xdot[s] = state[4]
+            ydot[s] = state[5]
+            zdot[s] = state[6]
+            t[s] = getTimeByIndex(arc, s)
+        end
+        JC::Float64 = getJacobiConstant(orbit)
+        varsig::Float64 = getStabilityIndex(orbit)
+        orbits[o] = CR3BPOrb(x, y, z, xdot, ydot, zdot, t, orbit.period, JC, varsig)
+    end
+    fam = CR3BPOrbFam(orbits)
+    MATLAB.put_variable(file, name, fam)
+end
+
+"""
+    MATExportCR3BPOrbFamily(family, file, name)
+
+Export CR3BP multiple shooter orbit family data to MAT file
+
+# Arguments
+- `family::CR3BPMSOrbitFamily`: CR3BP multiple shooter periodic orbit family object
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function MATExportCR3BPOrbFamily(family::MBD.CR3BPMSOrbitFamily, file::MATLAB.MatFile, name::Symbol)
+    orbits::Vector{CR3BPOrb} = Vector{CR3BPOrb}(undef, getNumMembers(family))
+    for o::Int64 = 1:getNumMembers(family)
+        orbit::MBD.CR3BPMSPeriodicOrbit = getMember(family, o)
         propagator = MBD.Propagator()
         orbitStates::Vector{Vector{Float64}} = []
         orbitEpochs::Vector{Float64} = []
@@ -1349,16 +1446,16 @@ function MATExportCR3BPFamily(family::MBD.CR3BPOrbitFamily, file::MATLAB.MatFile
 end
 
 """
-    MATExportCR3BPFamily(family, file, name)
+    MATExportCR3BPTrajFamily(family, file, name)
 
-Export CR3BP family data to MAT file
+Export CR3BP trajectory family data to MAT file
 
 # Arguments
 - `family::CR3BPContinuationFamily`: CR3BP trajectory continuation family object
 - `file::MatFile`: MAT file
 - `name::Symbol`: Export object name
 """
-function MATExportCR3BPFamily(family::MBD.CR3BPContinuationFamily, file::MATLAB.MatFile, name::Symbol)
+function MATExportCR3BPTrajFamily(family::MBD.CR3BPContinuationFamily, file::MATLAB.MatFile, name::Symbol)
     trajs::Vector{CR3BPTraj} = Vector{CR3BPTraj}(undef, getNumMembers(family))
     for m::Int64 = 1:getNumMembers(family)
         solution = MBD.CR3BPMultipleShooterProblem()
