@@ -3,6 +3,7 @@ Period axial crossing targeter for BCR4BP spatial orbits
 
 Author: Jonathan Richmond
 C: 7/8/25
+U: 7/9/25
 """
 
 using MBD, DifferentialEquations, Logging, StaticArrays
@@ -215,7 +216,7 @@ function getResonantOrbit(targeter::SpatialAxialP12Targeter, initialOrbit::MBD.C
     solutionStates::Vector{Vector{Float64}} = append!([solution.nodes[n].state.data[1:7] for n = 1:numNodes-1], [solution.nodes[n].state.data[1:7].*[1, -1, 1, -1, 1, -1, -1] for n = numNodes:-1:1])
     solutionTimes::Vector{Float64} = append!([solution.nodes[n].epoch.data[1] for n = 1:numNodes-1], [solutionPeriod-solution.nodes[n].epoch.data[1] for n = numNodes:-1:1]) 
     orbit = MBD.BCR4BP12PeriodicOrbit(targeterEnd.dynamicsModel, solutionStates, solutionTimes, solutionPeriod, getMonodromy(targeterEnd, solution))
-    println("Converged $p:$q BCR4BP Orbit:\n\tIC:\t$(orbit.initialCondition)\n\tP:\t$(orbit.period)\n")
+    println("Converged $p:$q BCR4BP Orbit:\n\tIC:\t$(orbit.initialCondition)\n\tP:\t$(orbit.period)\n\tStab.:\t$(getStabilityIndex(orbit))\n")
 
     return orbit
 end

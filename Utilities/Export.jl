@@ -3,7 +3,7 @@ Export utility functions
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 7/8/25
+U: 7/9/25
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, MATLAB
@@ -607,7 +607,7 @@ function exportBCR4BP12Manifold(manifold::MBD.BCR4BP12Manifold, manifoldArcs::Ve
             t[s] = getTimeByIndex(arc, s)
             H[s] = getHamiltonian(manifold.periodicOrbit.dynamicsModel, state)
         end
-        arcs[a] = BCR4BP12Traj(x, y, z, xdot, ydot, zdot, theta4, t, H)
+        arcs[a] = BCR4BP12Traj(x, y, z, xdot, ydot, zdot, theta4, t, H, manifoldArcs[a].TOF)
     end
     man = BCR4BP12Man(orb, arcs, manifold.TOF)
     MATLAB.put_variable(file, name, man)
@@ -938,7 +938,7 @@ function exportCR3BPManifold(manifold::MBD.CR3BPManifold, manifoldArcs::Vector{M
             zdot[s] = state[6]
             t[s] = getTimeByIndex(arc, s)
         end
-        arcs[a] = CR3BPTraj(x, y, z, xdot, ydot, zdot, t, getJacobiConstant(manifold.periodicOrbit.dynamicsModel, getStateByIndex(arc, 1)))
+        arcs[a] = CR3BPTraj(x, y, z, xdot, ydot, zdot, t, manifoldArcs[a].TOF, getJacobiConstant(manifold.periodicOrbit.dynamicsModel, getStateByIndex(arc, 1)))
     end
     man = CR3BPMan(orb, arcs, manifold.TOF)
     MATLAB.put_variable(file, name, man)
@@ -1328,7 +1328,7 @@ function exportPseudoManifold(pseudoManifold::MBD.BCR4BPPseudoManifold, pseudoMa
             t[s] = getTimeByIndex(arc, s)
             H[s] = getHamiltonian(pseudoManifold.dynamicsModel, state)
         end
-        arcs[a] = BCR4BP12Traj(x, y, z, xdot, ydot, zdot, theta4, t, H)
+        arcs[a] = BCR4BP12Traj(x, y, z, xdot, ydot, zdot, theta4, t, H, pseudoManifoldArcs[a].TOF)
     end
     pseudoMan = PseudoMan(orb, arcs, pseudoManifold.TOF)
     MATLAB.put_variable(file, name, pseudoMan)
