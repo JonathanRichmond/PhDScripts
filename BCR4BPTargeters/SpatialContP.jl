@@ -3,7 +3,7 @@ Period state continuity targeter for BCR4BP spatial orbits
 
 Author: Jonathan Richmond
 C: 6/25/25
-U: 7/8/25
+U: 7/9/25
 """
 
 using MBD, DifferentialEquations, Logging, StaticArrays
@@ -203,7 +203,7 @@ function getResonantOrbit(targeter::SpatialContP12Targeter, initialOrbit::MBD.CR
     targeterEnd = SpatialContP12Targeter(dynamicsModelEnd)
     solution::MBD.BCR4BP12MultipleShooterProblem = correct(targeterEnd, [solutions.nodes[end][n].state.data[1:7] for n = 1:numNodes], [solutions.nodes[end][n].epoch.data[1] for n = 1:numNodes], numNodes, tol = refTol, JTol = JTol)
     orbit = MBD.BCR4BP12PeriodicOrbit(targeterEnd.dynamicsModel, [solution.nodes[n].state.data[1:7] for n = 1:numNodes], [solution.nodes[n].epoch.data[1] for n = 1:numNodes], getPeriod(targeterEnd, solution), getMonodromy(targeterEnd, solution))
-    println("Converged $p:$q BCR4BP Orbit:\n\tIC:\t$(orbit.initialCondition)\n\tP:\t$(orbit.period)\n")
+    println("Converged $p:$q BCR4BP Orbit:\n\tIC:\t$(orbit.initialCondition)\n\tP:\t$(orbit.period)\n\tStab.:\t$(getStabilityIndex(orbit))\n")
 
     return orbit
 end
