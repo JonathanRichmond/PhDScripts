@@ -3,6 +3,7 @@ Period state continuity targeter for BCR4BP spatial orbits
 
 Author: Jonathan Richmond
 C: 6/25/25
+U: 7/8/25
 """
 
 using MBD, DifferentialEquations, Logging, StaticArrays
@@ -159,7 +160,22 @@ function getResonantOrbit(targeter::SpatialContP12Targeter, initialOrbit::MBD.CR
     targeter0 = SpatialContP12Targeter(dynamicsModel0)
     propagator = MBD.Propagator()
     initialStateGuess::Vector{Float64} = push!(copy(initialOrbit.initialCondition), theta40)
-    guessArc::MBD.BCR4BP12Arc = propagate(propagator, initialStateGuess, [0, p*initialOrbit.period], dynamicsModel0)
+    targetTime::Float64 = p*initialOrbit.period/2
+    orbitArc::MBD.BCR4BP12Arc = propagate(propagator, initialStateGuess, [0, initialOrbit.period], dynamicsModel0)
+    guessArc = MBD.BCR4BP12Arc(dynamicsModel0)
+    currentTime::Float64 = 0.0
+    push!(guessArc.states, getStateByIndex(orbitArc, 1))
+    push!(guessArc.times, getTimeByIndex(orbitArc, 1))
+    while currentTime+initialOrbit.period <= targetTime
+        append!(guessArc.states, orbitArc.states[2:end])
+        append!(guessArc.times, orbitArc.times[2:end].+currentTime)
+        currentTime = getTimeByIndex(guessArc, -1)
+    end
+    if (targetTime-currentTime) > 1E-10
+        partialArc::MBD.BCR4BP12Arc = propagate(propagator, initialStateGuess, [0, targetTime-currentTime], dynamicsModel0)
+        append!(guessArc.states, partialArc.states[2:end])
+        append!(guessArc.times, partialArc.times[2:end].+currentTime)
+    end
     numStates::Int64 = getStateCount(guessArc)
     numNodes::Int64 = numSegs+1
     indices::Vector{Int64} = round.(Int64, range(1, numStates, numNodes))
@@ -177,7 +193,7 @@ function getResonantOrbit(targeter::SpatialContP12Targeter, initialOrbit::MBD.CR
     addJumpCheck!(continuationEngine, boundingBoxJumpCheck)
     homotopyEndCheck = MBD.HomotopyEndCheck(targeteps)
     addEndCheck!(continuationEngine, homotopyEndCheck)
-    continuationEngine.printProgress = true
+    # continuationEngine.printProgress = true
     solutions::MBD.BCR4BP12ContinuationFamily = doContinuation!(continuationEngine, solution0, solution1)
     (continuationEngine.dataInProgress.converging == false) && throw(ErrorException("Homotopy could not converge: Failed at $(continuationEngine.dataInProgress.previousSolution.nodes[1].dynamicsModel.systemData.P4Mass/targeter.dynamicsModel.systemData.primaryData[3].mass) with IC = $(continuationEngine.dataInProgress.previousSolution.nodes[1].state.data[1:7])"))
     Logging.@info "Converged Last Homotopy Orbit:\n\tIC:\t$(solutions.nodes[end][1].state.data[1:7])\n\tP:\t$(getPeriod(targeter, solutions.segments[end]))\n"
