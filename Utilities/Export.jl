@@ -3,15 +3,33 @@ Export utility functions
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 7/7/25
+U: 7/8/25
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, MATLAB
 
-export CSVExportCR3BPFamily, exportBCR4BP12Manifold, exportBCR4BP12Orbit, exportBCR4BP12Trajectory
-export exportBCR4BP41Trajectory, exportCR3BPManifold, exportCR3BPOrbit, exportCR3BPTrajectory
-export exportInertialTrajectory, exportPseudoManifold, fullExportCR3BPFamily
+export CSVExportCR3BPFamily, exportArrays, exportBCR4BP12Manifold, exportBCR4BP12Orbit
+export exportBCR4BP12Trajectory, exportBCR4BP41Trajectory, exportCR3BPManifold, exportCR3BPOrbit
+export exportCR3BPTrajectory, exportInertialTrajectory, exportPseudoManifold, fullExportCR3BPFamily
 export MATExportCR3BPOrbFamily, MATExportCR3BPTrajFamily
+
+"""
+    Arrays(vectors)
+
+Arrays export object
+
+# Arguments
+- `vectors::Vector{Vector{Float64}}`: Vectors
+"""
+struct Arrays
+    vectors::Vector{Vector{Float64}}                                    # Vectors
+
+    function Arrays(vectors::Vector{Vector{Float64}})
+        this = new(vectors)
+
+        return this
+    end
+end
 
 """
     BCR4BP12Orb(x, y, z, xdot, ydot, zdot, theta4, t, H, P, varsig)
@@ -444,6 +462,21 @@ function CSVExportCR3BPFamily(family::MBD.CR3BPContinuationFamily, file::String)
 end
 
 """
+    exportArrays(vectors, MATFile, name)
+
+Export vectors data to MAT file
+
+# Arguments
+- `vectors::Vector{Vector{Float64}}`: Vectors
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportArrays(vectors::Vector{Vector{Float64}}, file::MATLAB.MatFile, name::Symbol)
+    arrays = Arrays(vectors)
+    MATLAB.put_variable(file, name, arrays)
+end
+
+"""
     exportBCR4BP12Manifold(manifold, file, name)
 
 Export BCR4BP P1-P2 manifold data to MAT file
@@ -763,7 +796,7 @@ function exportBCR4BP41Trajectory(x0::Float64, y0::Float64, z0::Float64, xdot0::
         t[s] = getTimeByIndex(arc, s)
         H[s] = getHamiltonian(dynamicsModel, state)
     end
-    exportBCR4BP41Trajectory(x, y, z, xdot, ydot, zdot, theta2, t, H, TOF, file, name)
+    exportBCR4BP41Trajectory(x, y, z, xdot, ydot, zdot, theta2, t, H, t[end]-t[1], file, name)
 end
 
 """

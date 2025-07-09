@@ -8,7 +8,7 @@ U: 7/2/25
 module OrbMetrics
 println()
 
-using MBD, MATLAB, Logging
+using MBD, Logging, MATLAB
 
 global_logger(ConsoleLogger(stderr, Logging.Warn)) # Debug, Info, Warn, Error
 
