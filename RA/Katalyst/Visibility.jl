@@ -3,6 +3,7 @@ Script for computing orbit metrics
 
 Author: Jonathan Richmond
 C: 7/7/25
+U: 7/9/25
 """
 module Vis
 println()
@@ -80,7 +81,7 @@ end
 tarR::Float64 = 3.54E-3/getCharLength(systemData)
 Cd::Float64 = 0.5
 thetaS0::Float64 = 0.0
-xi0::Float64 = 0.0
+xi0::Float64 = 0*2*pi/q/4
 obsICs::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, q)
 for o::Int64 = 1:q
     xi::Float64 = xi0+2*pi*(o-1)/q
