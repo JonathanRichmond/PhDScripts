@@ -3,7 +3,7 @@ Script for computing orbit metrics
 
 Author: Jonathan Richmond
 C: 7/7/25
-U: 7/9/25
+U: 7/10/25
 """
 module Vis
 println()
@@ -70,10 +70,11 @@ r_M::Vector{Float64} = getPrimaryState(dynamicsModel, 2)[1:3]
 R_E::Float64 = systemData.primaryData[1].bodyRadius/getCharLength(systemData)
 R_M::Float64 = systemData.primaryData[2].bodyRadius/getCharLength(systemData)
 points::Vector{Vector{Float64}} = []
-while length(points) < 4000
+while length(points) < 6000
     d::Float64 = rand()*(L2[1]-r_E[1])
     theta::Float64 = rand()*2.0*pi
-    radius::Float64 = sqrt(rand())*2*(R_E+(R_M-R_E)*d)
+    # radius::Float64 = sqrt(rand())*2*(R_E+(R_M-R_E)*d)
+    radius::Float64 = sqrt(rand())*d*tan(10*pi/180)
     point::Vector{Float64} = [r_E[1]+d, radius*cos(theta), radius*sin(theta)]
     ((LinearAlgebra.norm(point-r_E) > R_E) && (LinearAlgebra.norm(point-r_M) > R_M)) && push!(points, point)
 end
