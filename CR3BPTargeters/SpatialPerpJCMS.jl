@@ -3,7 +3,7 @@ Jacobi constant perpendicular crossing multiple shooter for CR3BP spatial orbits
 
 Author: Jonathan Richmond
 C: 2/26/25
-U: 7/7/25
+U: 7/16/25
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, StaticArrays, Statistics
@@ -261,7 +261,7 @@ function interpOrbit(targeter::SpatialPerpJCMSTargeter, fileName::String, paramN
             newInitialCondition::Vector{Float64} = solution.nodes[1].state.data[1:6]
             newPeriod::Float64 = getPeriod(targeter, solution)
             newJC::Float64 = getJacobiConstant(targeter.dynamicsModel, newInitialCondition)
-            newMonodromy::Matrix{Float64} = getMonodromy(targeter, midSolution)
+            newMonodromy::Matrix{Float64} = getMonodromy(targeter, solution)
             newEigenvalues::Vector{Complex{Float64}} = LinearAlgebra.eigvals(newMonodromy)
             newStability::Float64 = LinearAlgebra.norm(newEigenvalues, Inf)
             midData::DataFrames.DataFrameRow = DataFrames.DataFrame("x" => newInitialCondition[1], "y" => newInitialCondition[2], "z" => newInitialCondition[3], "xdot" => newInitialCondition[4], "ydot" => newInitialCondition[5], "zdot" => newInitialCondition[6], "Period" => newPeriod, "JC" => newJC, "Stability Index" => newStability)[1,:]

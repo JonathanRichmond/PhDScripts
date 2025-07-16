@@ -4,7 +4,7 @@ Script for Earth-Moon CR3BP L1 southern first P7 halo orbit family
 
 Author: Jonathan Richmond
 C: 7/2/25
-U: 7/7/25
+U: 7/16/25
 """
 module EML1P7Halo
 println()
@@ -66,7 +66,7 @@ eigenSort!(family)
 # fullExportCR3BPFamily(family, "FamilyData/CR3BPEML1P7HO1s.mat", "FamilyData/CR3BPEML1P7HO1s.csv", :L1P7HO1s)
 
 # println("\nTesting interpolation...")
-# testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEML1P7HO1s.csv", "JC", 3.0, numNodes)
+# testOrbit::MBD.CR3BPMSPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEML1P7HO1s.csv", "JC", 3.0, numNodes)
 # println("Test Orbit:\n\tIC:\t$(testOrbit.initialCondition)\n\tP:\t$(testOrbit.period)\n\tJC:\t$(getJacobiConstant(testOrbit))\n")
 
 # println("Plotting orbit...")
