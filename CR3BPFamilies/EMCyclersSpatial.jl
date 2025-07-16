@@ -3,7 +3,7 @@ Script for Earth-Moon CR3BP spatial cycler orbit family
 
 Author: Jonathan Richmond
 C: 7/2/25
-U: 7/7/25
+U: 7/16/25
 """
 module EMCyclerSpat
 println()
@@ -65,7 +65,7 @@ eigenSort!(family)
 # fullExportCR3BPFamily(family, "FamilyData/CR3BPEMCyclersSpatial.mat", "FamilyData/CR3BPEMCyclersSpatial.csv", :CyclersSpatial)
 
 # println("\nTesting interpolation...")
-# testOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEMCyclersSpatial.csv", "JC", 3.1, numNodes)
+# testOrbit::MBD.CR3BPMSPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEMCyclersSpatial.csv", "JC", 3.1, numNodes)
 # println("Test Orbit:\n\tIC:\t$(testOrbit.initialCondition)\n\tP:\t$(testOrbit.period)\n\tJC:\t$(getJacobiConstant(testOrbit))\n")
 
 # println("Plotting orbit...")
