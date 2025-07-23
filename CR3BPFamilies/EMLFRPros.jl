@@ -3,7 +3,7 @@ Script for Earth-Moon CR3BP lunar free return prograde orbit family
 
 Author: Jonathan Richmond
 C: 7/1/25
-U: 7/3/25
+U: 7/21/25
 """
 module EMLFRPro
 println()
@@ -68,7 +68,7 @@ println("Last Converged Transfer:\n\tIC:\t$(lastTransfer.nodes[1].state.data[1:6
 #     xData[s], yData[s] = orbitArc.states[s][1], orbitArc.states[s][2]
 # end
 # (figure, axis) = set2DPlotParameters(L"Earth-Moon Planar LFR ($JC=%$(round(getJacobiConstant(dynamicsModel, solutions.nodes[plotTransfer][1].state.data[1:6]); digits = 4))$)", L"$x$ [ndim]", L"$y$ [ndim]")
-# GLMakie.lines!(axis, xData, yData, color = :white, label = L"\mathrm{Spatial\ Cycler\ Orbit}")
+# GLMakie.lines!(axis, xData, yData, color = :white, label = L"\mathrm{Lunar\ Free\ Return}")
 # GLMakie.scatter!(axis, getPrimaryState(dynamicsModel, 1)[1], getPrimaryState(dynamicsModel, 1)[2], color = :blue, markerspace = :data, markersize = 2*Earth.bodyRadius/getCharLength(systemData), label = L"\mathrm{Earth}" => (; markersize = 20))
 # GLMakie.scatter!(axis, getPrimaryState(dynamicsModel, 2)[1], getPrimaryState(dynamicsModel, 2)[2], color = :gray, markerspace = :data, markersize = 2*Moon.bodyRadius/getCharLength(systemData), label = L"\mathrm{Moon}" => (; markersize = 20))
 # GLMakie.Legend(figure[1,2], axis)

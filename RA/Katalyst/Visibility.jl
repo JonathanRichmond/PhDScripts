@@ -45,22 +45,22 @@ L2::Vector{Float64} = getEquilibriumPoint(dynamicsModel, 2)
 # obsTargeter = SpatialPerpVyTargeter(dynamicsModel)
 obsTargeter = PlanarPerpJCTargeter(dynamicsModel)
 # obsTargeter = SpatialPerpJCMSTargeter(dynamicsModel)
-targTargeter = PlanarLFRXTargeter(dynamicsModel)
+# targTargeter = PlanarLFRXTargeter(dynamicsModel)
 propagator = MBD.Propagator()
 tSyn::Float64 = getSynodicPeriod(BCR4BPDynamicsModel)
 
-p::Int64, q::Int64 = 1, 1
+p::Int64, q::Int64 = 3, 5
 # obsOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(obsTargeter, "FamilyData/CR3BPEMResonant3_2ProsSpatial.csv", "Period", tSyn*q/p)
 # obsOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(obsTargeter, "FamilyData/CR3BPEML1Halos.csv", "Period", tSyn*q/p)
 # obsOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(obsTargeter, "FamilyData/CR3BPEML2Halos.csv", "Period", tSyn*q/p)
 # obsOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(obsTargeter, "FamilyData/CR3BPEMResonant2_1Rets.csv", "Period", tSyn*q/p)
-obsOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(obsTargeter, "FamilyData/CR3BPEMResonant2_1Pros.csv", "Period", tSyn*q/p)
-# obsOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(obsTargeter, "FamilyData/CR3BPEMResonant3_2Pros.csv", "Period", tSyn*q/p)
+# obsOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(obsTargeter, "FamilyData/CR3BPEMResonant2_1Pros.csv", "Period", tSyn*q/p)
+obsOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(obsTargeter, "FamilyData/CR3BPEMResonant3_2Pros.csv", "Period", tSyn*q/p)
 # obsOrbit::MBD.CR3BPMSPeriodicOrbit = interpOrbit(obsTargeter, "FamilyData/CR3BPEMCyclersSpatial.csv", "Period", tSyn*q/p, 3)
 # obsOrbit::MBD.CR3BPMSPeriodicOrbit = interpOrbit(obsTargeter, "FamilyData/CR3BPEML1P7HO1s.csv", "Period", tSyn*q/p, 15)
 println("Converged Observer Orbit:\n\tIC:\t$(obsOrbit.initialCondition)\n\tP:\t$(obsOrbit.period) ($(obsOrbit.period*getCharTime(systemData)/3600/24) d.)\n\tJC:\t$(getJacobiConstant(obsOrbit))\n\tStab.:\t$(getStabilityIndex(obsOrbit))\n")
-targTraj::MBD.CR3BPMultipleShooterProblem = interpSolution(targTargeter, "FamilyData/CR3BPEMLFRPros.csv", "x", getPrimaryState(dynamicsModel, 2)[1]+100/getCharLength(systemData), 3, 185/getCharLength(systemData), 0.0)
-println("Converged Target Trajectory:\n\tIC:\t$(targTraj.nodes[end].state.data[1:6])\n\tTOF:\t$(getTOF(targTargeter, targTraj)) ($(getTOF(targTargeter, targTraj)*getCharTime(systemData)/3600/24) d.)\n\tJC:\t$(getJacobiConstant(dynamicsModel, targTraj.nodes[1].state.data[1:6]))\n")
+# targTraj::MBD.CR3BPMultipleShooterProblem = interpSolution(targTargeter, "FamilyData/CR3BPEMLFRPros.csv", "x", getPrimaryState(dynamicsModel, 2)[1]+100/getCharLength(systemData), 3, 185/getCharLength(systemData), 0.0)
+# println("Converged Target Trajectory:\n\tIC:\t$(targTraj.nodes[end].state.data[1:6])\n\tTOF:\t$(getTOF(targTargeter, targTraj)) ($(getTOF(targTargeter, targTraj)*getCharTime(systemData)/3600/24) d.)\n\tJC:\t$(getJacobiConstant(dynamicsModel, targTraj.nodes[1].state.data[1:6]))\n")
 
 println("Sampling region...")
 nPoints::Int64 = 20000
