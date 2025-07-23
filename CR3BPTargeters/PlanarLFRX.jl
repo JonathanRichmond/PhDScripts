@@ -3,11 +3,12 @@ Initial x-position targeter for CR3BP planar lunar free returns
 
 Author: Jonathan Richmond
 C: 7/1/25
+U: 7/21/25
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, StaticArrays
 
-export PlanarPerpJCTargeter
+export PlanarLFRXTargeter
 export correct, getIndividualSolution, getTOF, interpSolution, propagateState
 
 """
@@ -99,7 +100,7 @@ end
 Return trajectory time-of-flight
 
 # Arguments
-- `targeter::PlanarLFRXTargeter`: CR3BP planar lunar free return intial x-position targeter object
+- `targeter::PlanarLFRXTargeter`: CR3BP planar lunar free return initial x-position targeter object
 - `segments::Vector{CR3BPSegment}`: CR3BP segment objects
 """
 function getTOF(targeter::PlanarLFRXTargeter, segments::Vector{MBD.CR3BPSegment})
