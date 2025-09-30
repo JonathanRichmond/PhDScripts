@@ -3,6 +3,7 @@ Script for analyzing escape parameters and characteristics
 
 Author: Jonathan Richmond
 C: 9/22/25
+U: 9/30/25
 """
 module EscAn
 println()
@@ -25,20 +26,24 @@ EDynamicsModel = MBD.KDynamicsModel(ESystemData)
 SDynamicsModel = MBD.KDynamicsModel(SSystemData)
 EMDynamicsModel = MBD.CR3BPDynamicsModel(EMSystemData)
 EMSDynamicsModel = MBD.BCR4BP12DynamicsModel(EMSSystemData)
+SB1DynamicsModel = MBD.BCR4BP41DynamicsModel(EMSSystemData)
 Earth::MBD.BodyData, Moon::MBD.BodyData, Sun::MBD.BodyData = EMSSystemData.primaryData[1], EMSSystemData.primaryData[2], EMSSystemData.primaryData[3]
 
 propagator = MBD.Propagator()
 CR3BPTargeter = PlanarPerpJCTargeter(EMDynamicsModel)
 BCR4BPTargeter = PlanarPerpP12Targeter(EMSDynamicsModel)
 
-familyFile::String = "FamilyData/CR3BPEML2Lyapunovs.csv"
+familyFile::String = "FamilyData/CR3BPEML1Lyapunovs.csv"
 p::Int64, q::Int64 = 2, 1
 compOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPTargeter, familyFile, "Period", getSynodicPeriod(EMSDynamicsModel)*q/p; choiceIndex = 1)
 println("Converged $p:$q CR3BP Orbit:\n\tIC:\t$(compOrbit.initialCondition)\n\tP:\t$(compOrbit.period)\n\tStab.:\t$(getStabilityIndex(compOrbit))\n\tJC:\t$(getJacobiConstant(compOrbit))\n")
 q0JumpCheck = MBD.BoundingBoxJumpCheck("Initial State", [0.9 1.0; -1.5 -1.0])
 orbit::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(BCR4BPTargeter, compOrbit, 4*q, 0.0, p, q, q0JumpCheck)
 
-propTime::Float64 = pi*20
+E1_SB1::Vector{Float64} = getInstantaneousEquilibriumPoint(SB1DynamicsModel, 2, 0.0)
+H_SB1_E1::Float64 = getHamiltonian(SB1DynamicsModel, append!(E1_SB1, [0.0, 0.0, 0.0, 0.0]))
+
+propTime::Float64 = pi*15
 R_H::Float64 = get41CharLength(EMSSystemData)*(EMSSystemData.primaryData[1].mass/(3*(EMSSystemData.primaryData[3].mass+EMSSystemData.primaryData[1].mass)))^(1/3)/get12CharLength(EMSSystemData)
 HillsSphereEventCR3BP = DifferentialEquations.ContinuousCallback(MBD.p1CR3BPDistanceCondition, terminateAffect!)
 HillsSphereEventBCR4BP = DifferentialEquations.ContinuousCallback(MBD.p1BCR4BP12DistanceCondition, terminateAffect!)
@@ -81,34 +86,45 @@ pseudoManifold::MBD.BCR4BPPseudoManifold = getPseudoManifoldByArclength(compOrbi
 pseudoManifold.TOF = propTime
 pseudoManifoldArcs::Vector{MBD.BCR4BPPseudoManifoldArc} = stopCrashes(pseudoManifold)
 manifoldArcs::Vector{MBD.BCR4BPPseudoManifoldArc} = pseudoManifoldArcs[4:10]
+q0_SB1::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, length(manifoldArcs))
 r::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, length(manifoldArcs))
-vEsc::Vector{Float64} = zeros(Float64, length(manifoldArcs))
-a::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, length(manifoldArcs))
+t::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, length(manifoldArcs))
+a_E::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, length(manifoldArcs))
+a_S::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, length(manifoldArcs))
 e_E::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, length(manifoldArcs))
 e_S::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, length(manifoldArcs))
+H_SB1::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, length(manifoldArcs))
+quad_SB1::Vector{Vector{Int64}} = Vector{Vector{Int64}}(undef, length(manifoldArcs))
+vEsc::Vector{Float64} = zeros(Float64, length(manifoldArcs))
 for m::Int64 in 1:length(manifoldArcs)
     arcHills::MBD.BCR4BP12Arc = propagateWithEvent(propagator, HillsSphereEventBCR4BP, real(manifoldArcs[m].initialCondition), [0, manifoldArcs[m].TOF], EMSDynamicsModel, [R_H])
-    arcHills2::MBD.BCR4BP12Arc = propagateWithEvent(propagator, HillsSphereEventBCR4BP, real(manifoldArcs[m].initialCondition), [0, manifoldArcs[m].TOF], EMSDynamicsModel, 2*[R_H])
-    manifoldArcs[m].TOF = getTimeByIndex(arcHills2, -1)
+    arcTime::MBD.BCR4BP12Arc = propagate(propagator, real(manifoldArcs[m].initialCondition), [0, manifoldArcs[m].TOF], EMSDynamicsModel)
+    manifoldArcs[m].TOF = getTimeByIndex(arcTime, -1)
     arcHills_EarthEJ2000::Vector{Vector{Float64}} = rotating12ToPrimaryEcliptic(EMSDynamicsModel, "ECLIPJ2000", 1, "JAN 1 2030", arcHills.states, arcHills.times)[1]
-    arcHills2_EarthEJ2000::Vector{Vector{Float64}} = rotating12ToPrimaryEcliptic(EMSDynamicsModel, "ECLIPJ2000", 1, "JAN 1 2030", arcHills2.states, arcHills2.times)[1]
-    arcHills2_SunEJ2000::Vector{Vector{Float64}} = rotating12ToPrimaryEcliptic(EMSDynamicsModel, "ECLIPJ2000", 4, "JAN 1 2030", arcHills2.states, arcHills2.times)[1]
-    r[m] = zeros(Float64, getStateCount(arcHills2))
-    elementStates_E::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, getStateCount(arcHills2))
-    elementStates_S::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, getStateCount(arcHills2))
-    for s::Int64 in 1:getStateCount(arcHills2)
-        r[m][s] = getExcursion(EMSDynamicsModel, 1, getStateByIndex(arcHills2, s))
-        elementStates_E[s] = getOrbitalElements(EDynamicsModel, append!(arcHills2_EarthEJ2000[s][1:3]*get12CharLength(EMSDynamicsModel), arcHills2_EarthEJ2000[s][4:6]*get12CharLength(EMSDynamicsModel)./get12CharTime(EMSDynamicsModel)))
-        elementStates_S[s] = getOrbitalElements(SDynamicsModel, append!(arcHills2_SunEJ2000[s][1:3]*get12CharLength(EMSDynamicsModel), arcHills2_SunEJ2000[s][4:6]*get12CharLength(EMSDynamicsModel)./get12CharTime(EMSDynamicsModel)))
-    end
+    arcTime_EarthEJ2000::Vector{Vector{Float64}} = rotating12ToPrimaryEcliptic(EMSDynamicsModel, "ECLIPJ2000", 1, "JAN 1 2030", arcTime.states, arcTime.times)[1]
+    arcTime_SunEJ2000::Vector{Vector{Float64}} = rotating12ToPrimaryEcliptic(EMSDynamicsModel, "ECLIPJ2000", 4, "JAN 1 2030", arcTime.states, arcTime.times)[1]
+    arcTime_SB1::Vector{Vector{Float64}} = rotating12ToRotating41(EMSDynamicsModel, arcTime.states, arcTime.times)[1]
+    q0_SB1[m] = arcTime_SB1[1]
     vEsc[m] = LinearAlgebra.norm(arcHills_EarthEJ2000[end][4:6])
-    a[m] = zeros(Float64, length(elementStates_S))
-    e_E[m] = zeros(Float64, length(elementStates_E))
-    e_S[m] = zeros(Float64, length(elementStates_S))
-    for s::Int64 = 1:length(elementStates_S)
-        a[m][s] = elementStates_S[s][1]
-        e_E[m][s] = elementStates_E[s][2]
-        e_S[m][s] = elementStates_S[s][2]
+    r[m] = zeros(Float64, getStateCount(arcTime))
+    t[m] = zeros(Float64, getStateCount(arcTime))
+    a_E[m] = zeros(Float64, getStateCount(arcTime))
+    a_S[m] = zeros(Float64, getStateCount(arcTime))
+    e_E[m] = zeros(Float64, getStateCount(arcTime))
+    e_S[m] = zeros(Float64, getStateCount(arcTime))
+    H_SB1[m] = zeros(Float64, getStateCount(arcTime))
+    quad_SB1[m] = zeros(Int64, getStateCount(arcTime))
+    for s::Int64 in 1:getStateCount(arcTime)
+        r[m][s] = getExcursion(EMSDynamicsModel, 1, getStateByIndex(arcTime, s))
+        t[m][s] = getTimeByIndex(arcTime, s)
+        elementStates_E = getOrbitalElements(EDynamicsModel, append!(arcTime_EarthEJ2000[s][1:3]*get12CharLength(EMSDynamicsModel), arcTime_EarthEJ2000[s][4:6]*get12CharLength(EMSDynamicsModel)./get12CharTime(EMSDynamicsModel)))
+        elementStates_S = getOrbitalElements(SDynamicsModel, append!(arcTime_SunEJ2000[s][1:3]*get12CharLength(EMSDynamicsModel), arcTime_SunEJ2000[s][4:6]*get12CharLength(EMSDynamicsModel)./get12CharTime(EMSDynamicsModel)))
+        a_E[m][s] = elementStates_E[1]
+        a_S[m][s] = elementStates_S[1]
+        e_E[m][s] = elementStates_E[2]
+        e_S[m][s] = elementStates_S[2]
+        H_SB1[m][s] = getHamiltonian(SB1DynamicsModel, arcTime_SB1[s])
+        quad_SB1[m][s] = getQuadrant(SB1DynamicsModel, arcTime_SB1[s])
     end
 end
 
@@ -117,12 +133,18 @@ exportCR3BPOrbit(compOrbit, mf, :CR3BPCompOrbit)
 exportBCR4BP12Orbit(orbit, mf, :BCR4BPOrbit)
 for t::Int64 in 1:length(manifoldArcs)
     exportBCR4BP12Trajectory(manifoldArcs[t].initialCondition..., manifoldArcs[t].TOF, EMSDynamicsModel, mf, Symbol("Trajectory", t))
+    exportBCR4BP41Trajectory(q0_SB1[t]..., manifoldArcs[t].TOF*get12CharTime(EMSSystemData)/get41CharTime(EMSSystemData), SB1DynamicsModel, mf, Symbol("SB1Trajectory", t))
 end
 MATLAB.put_variable(mf, :d, r)
-MATLAB.put_variable(mf, :a_osc, a)
+MATLAB.put_variable(mf, :t, t)
+MATLAB.put_variable(mf, :a_osc_E, a_E)
+MATLAB.put_variable(mf, :a_osc_S, a_S)
 MATLAB.put_variable(mf, :e_osc_E, e_E)
 MATLAB.put_variable(mf, :e_osc_S, e_S)
+MATLAB.put_variable(mf, :H_SB1, H_SB1)
+MATLAB.put_variable(mf, :quad_SB1, quad_SB1)
 MATLAB.put_variable(mf, :v_esc, vEsc)
+MATLAB.put_variable(mf, :H_E1, H_SB1_E1)
 MATLAB.close(mf)
 
 SPICE.kclear()
