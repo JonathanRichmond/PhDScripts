@@ -33,18 +33,18 @@ perpTargeter = SpatialPerpP12Targeter(dynamicsModel)
 CR3BPVyTargeter = SpatialPerpVyTargeter(CR3BPDynamicsModel)
 CR3BPAxTargeter = SpatialAxialJCTargeter(CR3BPDynamicsModel)
 
-familyFile::String = "FamilyData/CR3BPEML2Axials.csv"
-p::Int64, q::Int64 = 11, 7
+familyFile::String = "FamilyData/CR3BPEML2Halos.csv"
+p::Int64, q::Int64 = 2, 1
 numSegs::Int64 = 4*q
-compOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPAxTargeter, familyFile, "Period", getSynodicPeriod(dynamicsModel)*q/p; choiceIndex = 1)
+compOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(CR3BPVyTargeter, familyFile, "Period", getSynodicPeriod(dynamicsModel)*q/p; choiceIndex = 1)
 println("Converged $p:$q CR3BP Orbit:\n\tIC:\t$(compOrbit.initialCondition)\n\tP:\t$(compOrbit.period)\n")
-# orbitArc::MBD.CR3BPArc = propagate(propagator, compOrbit.initialCondition, [0, compOrbit.period/2], CR3BPDynamicsModel)
-# halfState::Vector{Float64} = getStateByIndex(orbitArc, -1)
-# compOrbit = MBD.CR3BPPeriodicOrbit(CR3BPDynamicsModel, halfState, compOrbit.period, Matrix{Float64}(compOrbit.monodromy))
-# println(compOrbit.initialCondition)
-# q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.7 1.3; -0.2 0; 0 0.5])
-q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [1.0 1.2; NaN NaN; 0.2 0.6])
-orbit::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(axTargeter, compOrbit, numSegs, 0.0, p, q, q0JumpCheck, tol = 1E-11, refTol = 1E-11)
+orbitArc::MBD.CR3BPArc = propagate(propagator, compOrbit.initialCondition, [0, compOrbit.period/2], CR3BPDynamicsModel)
+halfState::Vector{Float64} = getStateByIndex(orbitArc, -1)
+compOrbit = MBD.CR3BPPeriodicOrbit(CR3BPDynamicsModel, halfState, compOrbit.period, Matrix{Float64}(compOrbit.monodromy))
+println(compOrbit.initialCondition)
+q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.7 1.3; -0.2 0; -0.5 0])
+# q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [1.0 1.2; NaN NaN; 0.1 0.6])
+orbit::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(perpTargeter, compOrbit, numSegs, 0.0, p, q, q0JumpCheck, tol = 1E-11, refTol = 1E-11)
 (orbitSB1::Vector{Vector{Float64}}, ~) = rotating12ToRotating41(dynamicsModel, [orbit.initialCondition], [0.0])
 
 mf = MATLAB.MatFile("Output/EMSpatialOrbit.mat", "w")
