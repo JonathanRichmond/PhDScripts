@@ -3,10 +3,10 @@ Script for comparing CR3BP and BCR4BP invariant and pseudo-manifolds
 
 Author: Jonathan Richmond
 C: 6/10/25
-U: 7/10/25
+U: 10/24/25
 """
-module ManComp
-println()
+# module ManComp
+println("Running ManifoldComparison.jl...\n")
 
 using MBD, DifferentialEquations, LinearAlgebra, Logging, MATLAB
 using Base.Threads
@@ -111,4 +111,4 @@ MATLAB.put_variable(mf, :vEscPseudo, vEscPseudo)
 MATLAB.close(mf)
 
 println()
-end
+# end
