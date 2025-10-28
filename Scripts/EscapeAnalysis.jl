@@ -3,10 +3,10 @@ Script for analyzing escape parameters and characteristics
 
 Author: Jonathan Richmond
 C: 9/22/25
-U: 10/6/25
+U: 10/24/25
 """
-module EscAn
-println()
+# module EscAn
+println("Running EscapeAnalysis.jl...\n")
 
 using MBD, Logging, MATLAB, SPICE
 
@@ -38,12 +38,12 @@ EMCR3BPTargeter = PlanarPerpJCTargeter(EMDynamicsModel)
 SB1CR3BPTargeter = PlanarPerpJCTargeter(SB1CR3BPDynamicsModel)
 BCR4BPTargeter = PlanarPerpP12Targeter(EMSDynamicsModel)
 
-familyFile::String = "FamilyData/CR3BPEML2Lyapunovs.csv"
-p::Int64, q::Int64 = 1, 1
+familyFile::String = "FamilyData/CR3BPEML1Lyapunovs.csv"
+p::Int64, q::Int64 = 2, 1
 compOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(EMCR3BPTargeter, familyFile, "Period", getSynodicPeriod(EMSDynamicsModel)*q/p; choiceIndex = 1)
 println("Converged $p:$q CR3BP Orbit:\n\tIC:\t$(compOrbit.initialCondition)\n\tP:\t$(compOrbit.period)\n\tStab.:\t$(getStabilityIndex(compOrbit))\n\tJC:\t$(getJacobiConstant(compOrbit))\n")
-q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.9 1.0; 1.0 2.0])
-# q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.9 1.0; -1.0 0])
+# q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.9 1.0; 1.0 2.0])
+q0JumpCheck = MBD.BoundingBoxJumpCheck("Node 1 State", [0.9 1.0; -1.0 0])
 orbit::MBD.BCR4BP12PeriodicOrbit = getResonantOrbit(BCR4BPTargeter, compOrbit, 4*q, 0.0, p, q, q0JumpCheck)
 
 L2_EM::Vector{Float64} = getEquilibriumPoint(EMDynamicsModel, 2)
@@ -57,7 +57,7 @@ propTime::Float64 = pi*15
 R_H::Float64 = get41CharLength(EMSSystemData)*(EMSSystemData.primaryData[1].mass/(3*(EMSSystemData.primaryData[3].mass+EMSSystemData.primaryData[1].mass)))^(1/3)/get12CharLength(EMSSystemData)
 sphereEventCR3BP = DifferentialEquations.ContinuousCallback(MBD.p1CR3BPDistanceCondition, terminateAffect!)
 P2SphereEventCR3BP = DifferentialEquations.ContinuousCallback(MBD.p2DistanceCondition, terminateAffect!)
-sphereEventBCR4BP = DifferentialEquations.ContinuousCallback(MBD.p1BCR4BP12DistanceCondition, terminateAffect!)
+sphereEventBCR4BP = DifferentialEquations.ContinuousCallback(MBD.b1BCR4BP12DistanceCondition, terminateAffect!)
 
 # CR3BPPosManifold::MBD.CR3BPManifold = getManifoldByArclength(compOrbit, "Unstable", "Positive", 25/getCharLength(CR3BPSystemData), 200)
 # CR3BPPosManifold.TOF = propTime
@@ -107,10 +107,11 @@ e_S::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, numArcs)
 quad_SB1::Vector{Vector{Int64}} = Vector{Vector{Int64}}(undef, numArcs)
 JC_EM::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, numArcs)
 JC_SB1::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, numArcs)
+H_EM::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, numArcs)
 vEsc::Vector{Float64} = zeros(Float64, numArcs)
 hz::Vector{Float64} = zeros(Float64, numArcs)
 for m::Int64 in 1:numArcs
-    arcEsc::MBD.BCR4BP12Arc = propagateWithEvent(propagator, sphereEventBCR4BP, real(manifoldArcs[m].initialCondition), [0, manifoldArcs[m].TOF], EMSDynamicsModel, [600000/get12CharLength(EMSSystemData)])
+    arcEsc::MBD.BCR4BP12Arc = propagateWithEvent(propagator, sphereEventBCR4BP, real(manifoldArcs[m].initialCondition), [0, manifoldArcs[m].TOF], EMSDynamicsModel, [750000/get12CharLength(EMSSystemData)])
     arcHills::MBD.BCR4BP12Arc = propagateWithEvent(propagator, sphereEventBCR4BP, real(manifoldArcs[m].initialCondition), [0, manifoldArcs[m].TOF], EMSDynamicsModel, [R_H])
     arcTime::MBD.BCR4BP12Arc = propagate(propagator, real(manifoldArcs[m].initialCondition), [0, manifoldArcs[m].TOF], EMSDynamicsModel)
     manifoldArcs[m].TOF = getTimeByIndex(arcTime, -1)
@@ -120,7 +121,7 @@ for m::Int64 in 1:numArcs
     (arcTime_SB1::Vector{Vector{Float64}}, t_SB1::Vector{Float64}) = rotating12ToRotating41(EMSDynamicsModel, arcTime.states, arcTime.times)
     vEsc[m] = LinearAlgebra.norm(arcHills_EarthEJ2000[end][4:6])
     escState::Vector{Float64} = getStateByIndex(arcEsc, -1)
-    hz[m] = escState[1]*escState[5]-escState[2]*escState[4]
+    hz[m] = (abs(getTimeByIndex(arcEsc, -1)) < abs(manifoldArcs[m].TOF)) ? escState[1]*escState[5]-escState[2]*escState[4] : NaN
     numStates::Int64 = getStateCount(arcTime)
     r[m] = zeros(Float64, numStates)
     t[m] = zeros(Float64, numStates)
@@ -139,6 +140,7 @@ for m::Int64 in 1:numArcs
     quad_SB1[m] = zeros(Int64, numStates)
     JC_EM[m] = zeros(Float64, numStates)
     JC_SB1[m] = zeros(Float64, numStates)
+    H_EM[m] = zeros(Float64, numStates)
     for s::Int64 in 1:numStates
         r[m][s] = getExcursion(EMSDynamicsModel, 1, getStateByIndex(arcTime, s))
         t[m][s] = getTimeByIndex(arcTime, s)
@@ -159,6 +161,7 @@ for m::Int64 in 1:numArcs
         quad_SB1[m][s] = getQuadrant(SB1DynamicsModel, arcTime_SB1[s])
         JC_EM[m][s] = getJacobiConstant(EMDynamicsModel, getStateByIndex(arcTime, s)[1:6])
         JC_SB1[m][s] = getJacobiConstant(SB1CR3BPDynamicsModel, arcTime_SB1[s])
+        H_EM[m][s] = getHamiltonian(EMSDynamicsModel, getStateByIndex(arcTime, s)[1:7])
     end
     exportBCR4BP41Trajectory(x_SB1, y_SB1, z_SB1, xdot_SB1, ydot_SB1, zdot_SB1, theta2_SB1, t_SB1, H_SB1, t_SB1[end], mf, Symbol("SB1Trajectory", m))
 end
@@ -201,10 +204,11 @@ MATLAB.put_variable(mf, :v_esc, vEsc)
 MATLAB.put_variable(mf, :h_z, hz)
 MATLAB.put_variable(mf, :JC_EM_L2, JC_EM_L2)
 MATLAB.put_variable(mf, :JC_SB1_L2, JC_SB1_L2)
+MATLAB.put_variable(mf, :H_EM, H_EM)
 MATLAB.put_variable(mf, :H_E2, H_SB1_E2)
 MATLAB.close(mf)
 
 SPICE.kclear()
 
 println()
-end
+# end
