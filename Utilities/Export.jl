@@ -3,7 +3,7 @@ Export utility functions
 
 Author: Jonathan Richmond
 C: 2/19/25
-U: 7/9/25
+U: 11/3/25
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, MATLAB
@@ -877,7 +877,7 @@ function exportCR3BPManifold(manifold::MBD.CR3BPManifold, file::MATLAB.MatFile, 
             zdot[s] = state[6]
             t[s] = getTimeByIndex(arc, s)
         end
-        arcs[a] = CR3BPTraj(x, y, z, xdot, ydot, zdot, t, getJacobiConstant(manifold.periodicOrbit.dynamicsModel, getStateByIndex(arc, 1)))
+        arcs[a] = CR3BPTraj(x, y, z, xdot, ydot, zdot, t, manifold.TOF, getJacobiConstant(manifold.periodicOrbit.dynamicsModel, getStateByIndex(arc, 1)))
     end
     man = CR3BPMan(orb, arcs, manifold.TOF)
     MATLAB.put_variable(file, name, man)
