@@ -3,7 +3,7 @@ Script for computing periapsis maps
 
 Author: Jonathan Richmond
 C: 10/9/25
-U: 11/7/25
+U: 11/8/25
 """
 # module PeriMap
 println("Running PeriapsisMap.jl...\n")
@@ -155,62 +155,99 @@ SB1CR3BPDynamicsModel = MBD.CR3BPDynamicsModel(SB1CR3BPSystemData)
 EMDynamicsModel = MBD.BCR4BP12DynamicsModel(systemData)
 SB1DynamicsModel = MBD.BCR4BP41DynamicsModel(systemData)
 
+mu12::Float64 = get12MassRatio(systemData)
+mu41::Float64 = get41MassRatio(systemData)
+lstar12::Float64 = get12CharLength(systemData)
+lstar41::Float64 = get41CharLength(systemData)
+tstar12::Float64 = get12CharTime(systemData)
+tstar41::Float64 = get41CharTime(systemData)
+
 propagator = MBD.Propagator()
 endEventsBCR4BP = DifferentialEquations.VectorContinuousCallback(endConditionsBCR4BP, endAffectBCR4BP!, nothing, 4)
 endEventsCR3BP = DifferentialEquations.VectorContinuousCallback(endConditionsCR3BP, endAffectCR3BP!, nothing, 4)
 manifoldEvent = DifferentialEquations.ContinuousCallback(periapsisCondition, nothing, endAffectManifold!)
 
 JCEM::Float64 = 3.0663
-thetaM::Float64 = pi*0
-R_H::Float64 = get41CharLength(systemData)*(systemData.primaryData[1].mass/(3*(systemData.primaryData[3].mass+systemData.primaryData[1].mass)))^(1/3)
+R_H::Float64 = lstar41*(systemData.primaryData[1].mass/(3*(systemData.primaryData[3].mass+systemData.primaryData[1].mass)))^(1/3)
+r_H_EM::Float64 = R_H/lstar12
+r_H::Float64 = R_H/lstar41
+r_E_EM::Float64 = systemData.primaryData[1].bodyRadius/lstar12
+r_E::Float64 = systemData.primaryData[1].bodyRadius/lstar41
+r_M_EM::Float64 = systemData.primaryData[2].bodyRadius/lstar12
+r_M::Float64 = systemData.primaryData[2].bodyRadius/lstar41
 
 radius::Float64 = 0.0035
 # radius::Float64 = 0.00075
-n::Int64 = 500
+n::Int64 = 300
+numAngles::Int64 = 37
 
-x_B1::Float64 = 1-get41MassRatio(systemData)
-x_Moon::Float64 = 1-get41MassRatio(systemData)+(1-get12MassRatio(systemData))*get12CharLength(systemData)/get41CharLength(systemData)
+thetaM::Vector{Float64} = range(0, 360, numAngles)*pi/180
+x_B1::Float64 = 1-mu41
+x_Moon::Float64 = 1-mu41+(1-mu12)*lstar12/lstar41
 xSB1::Vector{Float64} = range(x_B1-radius, x_B1+radius, n)
 # xSB1::Vector{Float64} = range(x_Moon-radius, x_Moon+radius, n)
 ySB1::Vector{Float64} = range(-radius, radius, n)
 posSB1::Vector{StaticArrays.SVector{2, Float64}} = vec([StaticArrays.SVector(x, y) for x in xSB1, y in ySB1])
-deltarSB1::Vector{StaticArrays.SVector{2, Float64}} = posSB1 .- Ref(StaticArrays.SVector{2, Float64}([1-get41MassRatio(systemData), 0]))
+deltarSB1::Vector{StaticArrays.SVector{2, Float64}} = posSB1 .- Ref(StaticArrays.SVector{2, Float64}([1-mu41, 0]))
 rSB1::Vector{Float64} = LinearAlgebra.norm.(deltarSB1)
 rhatSB1::Vector{StaticArrays.SVector{2, Float64}} = deltarSB1 ./ rSB1
 thatSB1::Vector{StaticArrays.SVector{2, Float64}} = [StaticArrays.SVector(-v[2], v[1]) for v in rhatSB1] # Prograde
 # thatSB1::Vector{StaticArrays.SVector{2, Float64}} = [StaticArrays.SVector(v[2], -v[1]) for v in rhatSB1] # Retrograde
-qGuessSB1::Vector{Vector{Float64}} = [[posSB1[j]..., 0, thatSB1[j]..., 0, thetaM] for j in eachindex(posSB1)]
-qGuessEM::Vector{Vector{Float64}} = matRotating41ToRotating12(SB1DynamicsModel, qGuessSB1, zeros(length(qGuessSB1)))[1]
-OmegaEM::Vector{Float64} = map(q -> getPseudopotential(EMCR3BPDynamicsModel, q[1:3]), qGuessEM)
-v2EM::Vector{Float64} = 2 .* OmegaEM .- JCEM
-v2EM[v2EM .< 0] .= NaN
-vEM::Vector{Float64} = sqrt.(v2EM)
-Threads.@threads for j in eachindex(vEM)
-    qGuessEM[j][4:5] = qGuessEM[j][4:5] .* vEM[j] ./ norm(qGuessEM[j][4:5])
-end
-qSB1::Vector{Vector{Float64}} = matRotating12ToRotating41(EMDynamicsModel, qGuessEM, zeros(length(qGuessEM)))[1]
-flagsSB1::Vector{Int64} = Vector{Int64}(undef, length(qSB1))
-Threads.@threads for q in eachindex(qSB1)
-    if any(x -> isnan(x), qSB1[q])
-        flagsSB1[q] = 7
-    else
-        (arc::MBD.BCR4BP41Arc, event) = propagateWithEvents(propagator, endEventsBCR4BP, qSB1[q], [0, pi/2], SB1DynamicsModel, [SB1DynamicsModel, get41MassRatio(systemData), R_H/get41CharLength(systemData), systemData.primaryData[1].bodyRadius/get41CharLength(systemData), systemData.primaryData[2].bodyRadius/get41CharLength(systemData), Periapsis(0, [])])
-        if event == :earth
-            flagsSB1[q] = 8
-        elseif event == :moon
-            flagsSB1[q] = 8
-        elseif contains(String(event), "escape")
-            numPeris::RegexMatch{String} = match(r"\d+$", String(event))
-            flagsSB1[q] = parse(Int, numPeris.match)
+qSB1::Vector{Vector{Vector{Float64}}} = Vector{Vector{Vector{Float64}}}(undef, numAngles)
+qProp::Vector{Vector{Float64}} = []
+map_theta::Vector{Int64} = []
+map_q::Vector{Int64} = []
+for t::Int64 in eachindex(thetaM)
+    qGuessSB1::Vector{Vector{Float64}} = [[posSB1[j]..., 0, thatSB1[j]..., 0, thetaM[t]] for j in eachindex(posSB1)]
+    qGuessEM::Vector{Vector{Float64}} = matRotating41ToRotating12(SB1DynamicsModel, qGuessSB1, zeros(length(qGuessSB1)))[1]
+    OmegaEM::Vector{Float64} = map(q -> getPseudopotential(EMCR3BPDynamicsModel, q[1:3]), qGuessEM)
+    v2EM::Vector{Float64} = 2 .* OmegaEM .- JCEM
+    v2EM[v2EM .< 0] .= NaN
+    vEM::Vector{Float64} = sqrt.(v2EM)
+    @inbounds for j::Int64 in eachindex(vEM)
+        vel::Vector{Float64} = qGuessEM[j][4:5]
+        qGuessEM[j][4:5] = vel .* vEM[j] ./ LinearAlgebra.norm(vel)
+    end
+    qSB1[t] = matRotating12ToRotating41(EMDynamicsModel, qGuessEM, zeros(length(qGuessEM)))[1]
+    for q::Int64 in eachindex(qSB1[t])
+        if any(isnan, qSB1[t][q])
+            continue
         else
-            flagsSB1[q] = 9
+            push!(qProp, qSB1[t][q])
+            push!(map_theta, t)
+            push!(map_q, q)
         end
     end
 end
+m::Int64 = length(qProp)
+flagsSB1_vec::Vector{Int64} = zeros(Int64, m)
+println("Propagating $m BCR4BP trajectories with $(Threads.nthreads()) threads...")
+Threads.@threads for q::Int64 in 1:m
+    IC::Vector{Float64} = qProp[q]
+    (arc::MBD.BCR4BP41Arc, event::Symbol) = propagateWithEvents(propagator, endEventsBCR4BP, IC, [0, pi/2], SB1DynamicsModel, [SB1DynamicsModel, mu41, r_H, r_E, r_M, Periapsis(0, [])])
+    if (event == :earth) || (event == :moon)
+        flagsSB1_vec[q] = 8
+    else
+        e = String(event)
+        if occursin("escape", e)
+            numPeris::RegexMatch{String} = match(r"\d+$", e)
+            flagsSB1_vec[q] = numPeris === nothing ? 9 : parse(Int, numPeris.match)
+        else
+            flagsSB1_vec[q] = 9
+        end
+    end
+end
+flagsSB1::Vector{Vector{Int64}} = Vector{Vector{Int64}}(undef, numAngles)
+Threads.@threads for t::Int64 in 1:numAngles
+    flagsSB1[t] = fill(7, length(qSB1[t]))
+end
+Threads.@threads for j::Int64 in 1:m
+    flagsSB1[map_theta[j]][map_q[j]] = flagsSB1_vec[j]
+end
 
-xEM::Vector{Float64} = range(-radius, radius, n) .* get41CharLength(systemData) ./ get12CharLength(systemData)
-# xEM::Vector{Float64} = range(-radius, radius, n) .* get41CharLength(systemData) ./ get12CharLength(systemData) .+ (1-get12MassRatio(systemData))
-yEM::Vector{Float64} = range(-radius, radius, n) .* get41CharLength(systemData) ./ get12CharLength(systemData)
+xEM::Vector{Float64} = range(-radius, radius, n) .* lstar41 ./ lstar12
+# xEM::Vector{Float64} = range(-radius, radius, n) .* lstar41 ./ lstar12) .+ (1-mu12)
+yEM::Vector{Float64} = range(-radius, radius, n) .* lstar41 ./ lstar12
 deltar::Vector{Vector{Float64}} = [[x, y] for x in xEM for y in yEM]
 r::Vector{Float64} = LinearAlgebra.norm.(deltar)
 rhat::Vector{StaticArrays.SVector{2, Float64}} = deltar ./ r
@@ -221,26 +258,40 @@ v2::Vector{Float64} = 2 .* Omega .- JCEM
 v2[v2 .< 0] .= NaN
 v::Vector{Float64} = sqrt.(v2)
 qEM::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, length(v))
-Threads.@threads for j in eachindex(v)
+Threads.@threads for j::Int64 in eachindex(v)
     qEM[j] = append!(copy(deltar[j]), [0.0], v[j] .* that[j], [0.0])
 end
-flags::Vector{Int64} = Vector{Int64}(undef, length(qEM))
-Threads.@threads for q in eachindex(qEM)
-    if any(x -> isnan(x), qEM[q])
-        flags[q] = 7
+qPropEM::Vector{Vector{Float64}} = []
+map_qEM::Vector{Int64} = []
+for q::Int64 in eachindex(qEM)
+    if any(isnan, qEM[q])
+        continue
     else
-        (arc::MBD.CR3BPArc, event) = propagateWithEvents(propagator, endEventsCR3BP, qEM[q], [0, pi/2*get41CharTime(systemData)/get12CharTime(systemData)], EMCR3BPDynamicsModel, [EMCR3BPDynamicsModel, R_H/get12CharLength(systemData), systemData.primaryData[1].bodyRadius/get12CharLength(systemData), systemData.primaryData[2].bodyRadius/get12CharLength(systemData), Periapsis(0, [])])
-        if event == :earth
-            flags[q] = 8
-        elseif event == :moon
-            flags[q] = 8
-        elseif contains(String(event), "escape")
-            numPeris::RegexMatch{String} = match(r"\d+$", String(event))
-            flags[q] = parse(Int, numPeris.match)
+        push!(qPropEM, qEM[q])
+        push!(map_qEM, q)
+    end
+end
+mEM::Int64 = length(qPropEM)
+flagsEM_vec::Vector{Int64} = zeros(Int64, mEM)
+println("Propagating $mEM CR3BP trajectories with $(Threads.nthreads()) threads...")
+Threads.@threads for q::Int64 in 1:mEM
+    IC::Vector{Float64} = qPropEM[q]
+    (arc::MBD.CR3BPArc, event::Symbol) = propagateWithEvents(propagator, endEventsCR3BP, IC, [0, pi/2*tstar41/tstar12], EMCR3BPDynamicsModel, [EMCR3BPDynamicsModel, r_H_EM, r_E_EM, r_M_EM, Periapsis(0, [])])
+    if (event == :earth) || (event == :moon)
+        flagsEM_vec[q] = 8
+    else
+        e = String(event)
+        if occursin("escape", e)
+            numPeris::RegexMatch{String} = match(r"\d+$", e)
+            flagsEM_vec[q] = numPeris === nothing ? 9 : parse(Int, numPeris.match)
         else
-            flags[q] = 9
+            flagsEM_vec[q] = 9
         end
     end
+end
+flagsEM::Vector{Int64} = fill(7, length(qEM))
+Threads.@threads for j::Int64 in 1:mEM
+    flagsEM[map_qEM[j]] = flagsEM_vec[j]
 end
 
 # targeter = PlanarPerpJCTargeter(EMCR3BPDynamicsModel)
@@ -270,9 +321,9 @@ MATLAB.put_variable(mf, :pointsSB1, qSB1)
 MATLAB.put_variable(mf, :pointsEM, qEM)
 # MATLAB.put_variable(mf, :manifold, qMan)
 MATLAB.put_variable(mf, :flagsSB1, flagsSB1)
-MATLAB.put_variable(mf, :flagsEM, flags)
+MATLAB.put_variable(mf, :flagsEM, flagsEM)
 MATLAB.put_variable(mf, :JC, JCEM)
-MATLAB.put_variable(mf, :moonAngle, thetaM)
+MATLAB.put_variable(mf, :moonAngles, thetaM)
 MATLAB.close(mf)
 
 println()
