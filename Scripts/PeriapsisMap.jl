@@ -3,7 +3,7 @@ Script for computing periapsis maps
 
 Author: Jonathan Richmond
 C: 10/9/25
-U: 11/8/25
+U: 11/10/25
 """
 # module PeriMap
 println("Running PeriapsisMap.jl...\n")
@@ -178,8 +178,8 @@ r_M::Float64 = systemData.primaryData[2].bodyRadius/lstar41
 
 radius::Float64 = 0.0035
 # radius::Float64 = 0.00075
-n::Int64 = 500 #300
-numAngles::Int64 = 73 #37
+n::Int64 = 2 #500
+numAngles::Int64 = 2 #73
 
 thetaM::Vector{Float64} = range(0, 360, numAngles)*pi/180
 x_B1::Float64 = 1-mu41
@@ -231,7 +231,8 @@ Threads.@threads for q::Int64 in 1:m
         e = String(event)
         if occursin("escape", e)
             numPeris::RegexMatch{String} = match(r"\d+$", e)
-            flagsSB1_vec[q] = numPeris === nothing ? 9 : parse(Int, numPeris.match)
+            tempFlag::Int64 = numPeris === nothing ? 9 : parse(Int, numPeris.match)
+            flagsSB1_vec[q] = (tempFlag > 6) ? 9 : tempFlag
         else
             flagsSB1_vec[q] = 9
         end
