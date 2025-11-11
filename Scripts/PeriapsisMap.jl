@@ -178,8 +178,8 @@ r_M::Float64 = systemData.primaryData[2].bodyRadius/lstar41
 
 radius::Float64 = 0.0035
 # radius::Float64 = 0.00075
-n::Int64 = 2 #500
-numAngles::Int64 = 2 #73
+n::Int64 = 500 #500
+numAngles::Int64 = 121 #73
 
 thetaM::Vector{Float64} = range(0, 360, numAngles)*pi/180
 x_B1::Float64 = 1-mu41
