@@ -158,6 +158,7 @@ p::Int64 = length(qProp)
 flagsBCR4BP_vec::Vector{Int64} = zeros(Int64, p*numAngles)
 println("Propagating $(p*numAngles) BCR4BP trajectories with $(Threads.nthreads()) threads...")
 for t::Int64 in 1:numAngles
+    println("\tSun angle $t/numAngles...")
     Threads.@threads for j::Int64 in 1:p
         IC::Vector{Float64} = push!(collect(qProp[j]), thetaS[t])
         (arc::MBD.BCR4BP12Arc, event::Symbol) = propagateWithEvents(propagator, endEventsBCR4BP, IC, [0, pi*6.0], BCR4BPDynamicsModel, [BCR4BPDynamicsModel, r_H, r_E, r_M, Periapsis(0, [])])
