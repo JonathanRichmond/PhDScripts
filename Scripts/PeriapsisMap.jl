@@ -119,7 +119,7 @@ r_H::Float64 = R_H/lstar12
 radius::Float64 = 1.25
 # radius::Float64 = 0.00075
 n::Int64 = 500 #500
-numAngles::Int64 = 121 #73
+numAngles::Int64 = 361 #121
 thetaS::Vector{Float64} = collect(range(0, 360, numAngles))*pi/180
 
 x_M::Float64 = 1-mu12
