@@ -3,7 +3,7 @@ Script for computing periapsis maps
 
 Author: Jonathan Richmond
 C: 10/9/25
-U: 11/12/25
+U: 11/14/25
 """
 # module PeriMap
 println("Running PeriapsisMap.jl...\n")
@@ -89,12 +89,11 @@ end
 # function endAffectManifold!(integrator)
 #     integrator.p[2].count += 1
 #     push!(integrator.p[2].states, copy(integrator.u))
-#     if integrator.p[2].count >= 6
-#         DifferentialEquations.terminate!(integrator)
-#     end
 # end
 
-mf = MATLAB.MatFile("Output/PeriapsisMap.mat", "w")
+# mf = MATLAB.MatFile("Output/PeriapsisMap.mat", "w")
+mf = MATLAB.MatFile("Output/PeriapsisMap_Moon.mat", "w")
+# mf = MATLAB.MatFile("Output/PeriapsisMap_Manifold.mat", "w")
 
 CR3BPSystemData = MBD.CR3BPSystemData("Earth", "Moon")
 BCR4BPSystemData = MBD.BCR4BPSystemData("Earth", "Moon", "Sun", "Earth_Barycenter")
@@ -116,15 +115,15 @@ endEventsCR3BP = DifferentialEquations.VectorContinuousCallback(endConditionsCR3
 JC::Float64 = 3.0663
 R_H::Float64 = lstar41*(BCR4BPSystemData.primaryData[1].mass/(3*(BCR4BPSystemData.primaryData[3].mass+BCR4BPSystemData.primaryData[1].mass)))^(1/3)
 r_H::Float64 = R_H/lstar12
-radius::Float64 = 1.25
-# radius::Float64 = 0.00075
-n::Int64 = 500 #500
-numAngles::Int64 = 361 #121
+# radius::Float64 = 1.25
+radius::Float64 = 0.3
+n::Int64 = 200 #500
+numAngles::Int64 = 3 #121
 thetaS::Vector{Float64} = collect(range(0, 360, numAngles))*pi/180
 
 x_M::Float64 = 1-mu12
-xGrid::Vector{Float64} = collect(range(-radius, radius, n))
-# xGrid::Vector{Float64} = collect(range(x_M-radius, x_M+radius, n))
+# xGrid::Vector{Float64} = collect(range(-radius, radius, n))
+xGrid::Vector{Float64} = collect(range(x_M-radius, x_M+radius, n))
 yGrid::Vector{Float64} = collect(range(-radius, radius, n))
 rGrid::Vector{Vector{Float64}} = [[x, y] for x in xGrid for y in yGrid]
 dGrid::Vector{Float64} = LinearAlgebra.norm.(rGrid)
@@ -208,21 +207,24 @@ Threads.@threads for j::Int64 in 1:p
     flagsCR3BP[qMap[j]] = flagsCR3BP_vec[j]
 end
 
-# targeter = PlanarPerpJCTargeter(EMCR3BPDynamicsModel)
+# targeter = PlanarPerpJCTargeter(CR3BPDynamicsModel)
 # familyFile::String = "FamilyData/CR3BPEML2Lyapunovs.csv"
-# orbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, familyFile, "JC", JCEM; choiceIndex = 1)
-# manifold::MBD.CR3BPManifold = getManifoldByArclength(orbit, "Stable", "Negative", 25/get12CharLength(systemData), n*10)
+# orbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, familyFile, "JC", JC; choiceIndex = 1)
+# manifold::MBD.CR3BPManifold = getManifoldByArclength(orbit, "Stable", "Negative", 25/get12CharLength(BCR4BPSystemData), n*10)
 # nThreads::Int64 = Threads.nthreads()
-# qMan_thread::Vector{Vector{Vector{Float64}}} = [Vector{Vector{Float64}}() for _ in 1:nThreads]
+# xMan_thread::Vector{Vector{Float64}} = [[] for _ in 1:nThreads]
+# yMan_thread::Vector{Vector{Float64}} = [[] for _ in 1:nThreads]
 # Threads.@threads for a in eachindex(manifold.orbitTimes)
 #     tid = mod1(Threads.threadid(), nThreads)
 #     peris = Periapsis(0, [])
-#     arc::MBD.CR3BPArc = propagateWithEvent(propagator, manifoldEvent, real(manifold.initialConditions[a]), [0, -pi/2*get41CharTime(systemData)/get12CharTime(systemData)], EMCR3BPDynamicsModel, [peris])
+#     arc::MBD.CR3BPArc = propagateWithEvent(propagator, manifoldEvent, real(manifold.initialConditions[a]), [0, -pi*6.0], CR3BPDynamicsModel, [peris])
 #     for p in eachindex(peris.states)
-#         push!(qMan_thread[tid], peris.states[p])
+#         push!(xMan_thread[tid], peris.states[p][1])
+#         push!(yMan_thread[tid], peris.states[p][2])
 #     end
 # end
-# qMan::Vector{Vector{Float64}} = reduce(vcat, qMan_thread)
+# xMan::Vector{Float64} = reduce(vcat, xMan_thread)
+# yMan::Vector{Float64} = reduce(vcat, yMan_thread)
 
 # sample::Int64 = 22296
 # (arc41::MBD.BCR4BP41Arc, event) = propagateWithEvents(propagator, endEventsBCR4BP, qSB1[sample], [0, pi/2], SB1DynamicsModel, [SB1DynamicsModel, get41MassRatio(systemData), R_H/get41CharLength(systemData), systemData.primaryData[1].bodyRadius/get41CharLength(systemData), systemData.primaryData[2].bodyRadius/get41CharLength(systemData), Periapsis(0, [])])
@@ -235,9 +237,10 @@ MATLAB.put_variable(mf, :xPoints, xPoint)
 MATLAB.put_variable(mf, :yPoints, yPoint)
 MATLAB.put_variable(mf, :flagsBCR4BP, flagsBCR4BP)
 MATLAB.put_variable(mf, :flagsCR3BP, flagsCR3BP)
-# MATLAB.put_variable(mf, :manifold, qMan)
 MATLAB.put_variable(mf, :JC, JC)
 MATLAB.put_variable(mf, :thetaS, thetaS)
+# MATLAB.put_variable(mf, :xManifold, xMan)
+# MATLAB.put_variable(mf, :yManifold, yMan)
 MATLAB.close(mf)
 
 println()
