@@ -3,7 +3,7 @@ Script for computing periapsis maps
 
 Author: Jonathan Richmond
 C: 10/9/25
-U: 11/14/25
+U: 11/18/25
 """
 # module PeriMap
 println("Running PeriapsisMap.jl...\n")
@@ -91,9 +91,10 @@ end
 #     push!(integrator.p[2].states, copy(integrator.u))
 # end
 
-# mf = MATLAB.MatFile("Output/PeriapsisMap.mat", "w")
-mf = MATLAB.MatFile("Output/PeriapsisMap_Moon.mat", "w")
-# mf = MATLAB.MatFile("Output/PeriapsisMap_Manifold.mat", "w")
+mf = MATLAB.MatFile("Output/PeriapsisMaps/PeriapsisMap.mat", "w")
+# mf = MATLAB.MatFile("Output/PeriapsisMaps/PeriapsisMap_3_0663.mat", "w")
+# mf = MATLAB.MatFile("Output/PeriapsisMaps/PeriapsisMap_3_0663_Moon.mat", "w")
+# mf = MATLAB.MatFile("Output/PeriapsisMaps/PeriapsisMap_3_0663_Manifold.mat", "w")
 
 CR3BPSystemData = MBD.CR3BPSystemData("Earth", "Moon")
 BCR4BPSystemData = MBD.BCR4BPSystemData("Earth", "Moon", "Sun", "Earth_Barycenter")
@@ -115,15 +116,15 @@ endEventsCR3BP = DifferentialEquations.VectorContinuousCallback(endConditionsCR3
 JC::Float64 = 3.0663
 R_H::Float64 = lstar41*(BCR4BPSystemData.primaryData[1].mass/(3*(BCR4BPSystemData.primaryData[3].mass+BCR4BPSystemData.primaryData[1].mass)))^(1/3)
 r_H::Float64 = R_H/lstar12
-# radius::Float64 = 1.25
-radius::Float64 = 0.3
+radius::Float64 = 1.25
+# radius::Float64 = 0.3
 n::Int64 = 500 #500
-numAngles::Int64 = 361 #361
+numAngles::Int64 = 3 #361
 thetaS::Vector{Float64} = collect(range(0, 360, numAngles))*pi/180
 
 x_M::Float64 = 1-mu12
-# xGrid::Vector{Float64} = collect(range(-radius, radius, n))
-xGrid::Vector{Float64} = collect(range(x_M-radius, x_M+radius, n))
+xGrid::Vector{Float64} = collect(range(-radius, radius, n))
+# xGrid::Vector{Float64} = collect(range(x_M-radius, x_M+radius, n))
 yGrid::Vector{Float64} = collect(range(-radius, radius, n))
 rGrid::Vector{Vector{Float64}} = [[x, y] for x in xGrid for y in yGrid]
 dGrid::Vector{Float64} = LinearAlgebra.norm.(rGrid)
@@ -226,12 +227,20 @@ end
 # xMan::Vector{Float64} = reduce(vcat, xMan_thread)
 # yMan::Vector{Float64} = reduce(vcat, yMan_thread)
 
-# sample::Int64 = 22296
-# (arc41::MBD.BCR4BP41Arc, event) = propagateWithEvents(propagator, endEventsBCR4BP, qSB1[sample], [0, pi/2], SB1DynamicsModel, [SB1DynamicsModel, get41MassRatio(systemData), R_H/get41CharLength(systemData), systemData.primaryData[1].bodyRadius/get41CharLength(systemData), systemData.primaryData[2].bodyRadius/get41CharLength(systemData), Periapsis(0, [])])
-# exportBCR4BP41Trajectory(qSB1[sample]..., getTimeByIndex(arc41, -1), SB1DynamicsModel, mf, :Traj41)
-# println(getTimeByIndex(arc41, -1))
-# q::Vector{Float64} = rotating41ToRotating12(SB1DynamicsModel, [qSB1[sample]], [0.0])[1][1]
-# exportBCR4BP12Trajectory(q..., getTimeByIndex(arc41, -1)*get41CharTime(systemData)/get12CharTime(systemData), EMDynamicsModel, mf, :Traj12)
+# sample::Int64 = 104762 # 102172
+# newJC::Float64 = 3.0
+# Omega::Float64 = getPseudopotential(CR3BPDynamicsModel, [xPoint[sample], yPoint[sample], 0])
+# v::Float64 = sqrt(2*Omega-JC)
+# that::Vector{Float64} = [-yPoint[sample], xPoint[sample]]./sqrt(xPoint[sample]^2 + yPoint[sample]^2)
+# vvec::Vector{Float64} = that .* v
+# IC::Vector{Float64} = [xPoint[sample], yPoint[sample], 0, vvec[1], vvec[2], 0, 0]
+# exportBCR4BP12Trajectory(IC..., -pi*1.0, BCR4BPDynamicsModel, mf, :PreBurn)
+# exportBCR4BP12Trajectory(IC..., pi*6.0, BCR4BPDynamicsModel, mf, :NoBurn)
+# deltav::Float64 = sqrt(LinearAlgebra.norm(IC[4:6])^2-(newJC-JC))-LinearAlgebra.norm(IC[4:6])
+# newIC::Vector{Float64} = copy(IC)
+# newIC[4:5] = that .* (v+deltav)
+# exportBCR4BP12Trajectory(newIC..., pi*6.0, BCR4BPDynamicsModel, mf, :PostBurn)
+# MATLAB.put_variable(mf, :deltav, deltav*lstar12/tstar12)
 
 MATLAB.put_variable(mf, :xPoints, xPoint)
 MATLAB.put_variable(mf, :yPoints, yPoint)
