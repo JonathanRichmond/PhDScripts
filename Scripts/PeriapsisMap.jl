@@ -222,7 +222,7 @@ endEventsCR3BP = DifferentialEquations.VectorContinuousCallback(endConditionsCR3
 # yMan::Vector{Float64} = reduce(vcat, yMan_thread)
 
 n::Int64 = 500 #500
-numLevels::Int64 = 469 # 235
+numLevels::Int64 = 469 # 469
 JC::Vector{Float64} = collect(range(3.17, 2.0, numLevels))
 R_H::Float64 = lstar41*(BCR4BPSystemData.primaryData[1].mass/(3*(BCR4BPSystemData.primaryData[3].mass+BCR4BPSystemData.primaryData[1].mass)))^(1/3)
 r_H::Float64 = R_H/lstar12
