@@ -3,7 +3,7 @@ Script for computing periapsis maps
 
 Author: Jonathan Richmond
 C: 10/9/25
-U: 11/21/25
+U: 12/2/25
 """
 # module PeriMap
 println("Running PeriapsisMap.jl...\n")
@@ -92,10 +92,10 @@ function endAffectManifold!(integrator)
 end
 
 # mf = MATLAB.MatFile("Output/PeriapsisMaps/PeriapsisMap.mat", "w")
-# mf = MATLAB.MatFile("Output/PeriapsisMaps/PeriapsisMap_3_0663.mat", "w")
+mf = MATLAB.MatFile("Output/PeriapsisMaps/PeriapsisMap_3_0.mat", "w")
 # mf = MATLAB.MatFile("Output/PeriapsisMaps/PeriapsisMap_3_0663_Moon.mat", "w")
 # mf = MATLAB.MatFile("Output/PeriapsisMaps/PeriapsisMap_3_0663_Manifold.mat", "w")
-mf = MATLAB.MatFile("Output/PeriapsisMaps/PeriapsisMaps_JC.mat", "w")
+# mf = MATLAB.MatFile("Output/PeriapsisMaps/PeriapsisMaps_JC.mat", "w")
 
 CR3BPSystemData = MBD.CR3BPSystemData("Earth", "Moon")
 BCR4BPSystemData = MBD.BCR4BPSystemData("Earth", "Moon", "Sun", "Earth_Barycenter")
@@ -114,93 +114,93 @@ endEventsBCR4BP = DifferentialEquations.VectorContinuousCallback(endConditionsBC
 endEventsCR3BP = DifferentialEquations.VectorContinuousCallback(endConditionsCR3BP, endAffectCR3BP!, nothing, 4)
 # manifoldEvent = DifferentialEquations.ContinuousCallback(periapsisCondition, nothing, endAffectManifold!)
 
-# JC::Float64 = 3.0663 # 3.0663
-# R_H::Float64 = lstar41*(BCR4BPSystemData.primaryData[1].mass/(3*(BCR4BPSystemData.primaryData[3].mass+BCR4BPSystemData.primaryData[1].mass)))^(1/3)
-# r_H::Float64 = R_H/lstar12
-# radius::Float64 = 1.25
-# # radius::Float64 = 0.3
-# n::Int64 = 500 #500
-# numAngles::Int64 = 3 #361
-# thetaS::Vector{Float64} = collect(range(0, 360, numAngles))*pi/180
+JC::Float64 = 3.0 # 3.0663
+R_H::Float64 = lstar41*(BCR4BPSystemData.primaryData[1].mass/(3*(BCR4BPSystemData.primaryData[3].mass+BCR4BPSystemData.primaryData[1].mass)))^(1/3)
+r_H::Float64 = R_H/lstar12
+radius::Float64 = 1.25
+# radius::Float64 = 0.3
+n::Int64 = 500 #500
+numAngles::Int64 = 361 #361
+thetaS::Vector{Float64} = collect(range(0, 360, numAngles))*pi/180
 
-# x_M::Float64 = 1-mu12
-# xGrid::Vector{Float64} = collect(range(-radius, radius, n))
-# # xGrid::Vector{Float64} = collect(range(x_M-radius, x_M+radius, n))
-# yGrid::Vector{Float64} = collect(range(-radius, radius, n))
-# xPoint::Vector{Float64} = repeat(xGrid, inner = n)
-# yPoint::Vector{Float64} = repeat(yGrid, outer = n)
-# rGrid::Vector{Vector{Float64}} = [[x, y] for x in xGrid for y in yGrid]
-# dGrid::Vector{Float64} = LinearAlgebra.norm.(rGrid)
-# rhatGrid::Vector{Vector{Float64}} = [v ./ d for (v, d) in zip(rGrid, dGrid)]
-# thatGrid::Vector{Vector{Float64}} = [StaticArrays.SVector(-v[2], v[1]) for v in rhatGrid] # Prograde
-# # thatGrid::Vector{Vector{Float64}} = [StaticArrays.SVector(v[2], -v[1]) for v in rhatGrid] # Retrograde
-# OmegaGrid::Vector{Float64} = map(q -> getPseudopotential(CR3BPDynamicsModel, push!(copy(q), 0.0)), rGrid)
-# v2Grid::Vector{Float64} = 2 .* OmegaGrid .- JC
-# v2Grid[v2Grid .< 0] .= NaN
-# vGrid::Vector{Float64} = sqrt.(v2Grid)
-# qGrid::Vector{StaticArrays.SVector{6, Float64}} = Vector{StaticArrays.SVector{6, Float64}}(undef, n^2)
-# xPoint::Vector{Float64} = Vector{Float64}(undef, n^2)
-# yPoint::Vector{Float64} = Vector{Float64}(undef, n^2)
-# for j::Int64 in 1:n^2
-#     qGrid[j] = StaticArrays.SVector{6, Float64}(rGrid[j]..., 0.0, vGrid[j] .* thatGrid[j]..., 0.0)
-# end
-# valid = map(q -> !any(isnan, q), qGrid)
-# qProp::Vector{StaticArrays.SVector{6, Float64}} = qGrid[valid]
-# qMap::Vector{Int64} = findall(valid)
-# p::Int64 = length(qProp)
+x_M::Float64 = 1-mu12
+xGrid::Vector{Float64} = collect(range(-radius, radius, n))
+# xGrid::Vector{Float64} = collect(range(x_M-radius, x_M+radius, n))
+yGrid::Vector{Float64} = collect(range(-radius, radius, n))
+xPoint::Vector{Float64} = repeat(xGrid, inner = n)
+yPoint::Vector{Float64} = repeat(yGrid, outer = n)
+rGrid::Vector{Vector{Float64}} = [[x, y] for x in xGrid for y in yGrid]
+dGrid::Vector{Float64} = LinearAlgebra.norm.(rGrid)
+rhatGrid::Vector{Vector{Float64}} = [v ./ d for (v, d) in zip(rGrid, dGrid)]
+thatGrid::Vector{Vector{Float64}} = [StaticArrays.SVector(-v[2], v[1]) for v in rhatGrid] # Prograde
+# thatGrid::Vector{Vector{Float64}} = [StaticArrays.SVector(v[2], -v[1]) for v in rhatGrid] # Retrograde
+OmegaGrid::Vector{Float64} = map(q -> getPseudopotential(CR3BPDynamicsModel, push!(copy(q), 0.0)), rGrid)
+v2Grid::Vector{Float64} = 2 .* OmegaGrid .- JC
+v2Grid[v2Grid .< 0] .= NaN
+vGrid::Vector{Float64} = sqrt.(v2Grid)
+qGrid::Vector{StaticArrays.SVector{6, Float64}} = Vector{StaticArrays.SVector{6, Float64}}(undef, n^2)
+xPoint::Vector{Float64} = Vector{Float64}(undef, n^2)
+yPoint::Vector{Float64} = Vector{Float64}(undef, n^2)
+for j::Int64 in 1:n^2
+    qGrid[j] = StaticArrays.SVector{6, Float64}(rGrid[j]..., 0.0, vGrid[j] .* thatGrid[j]..., 0.0)
+end
+valid = map(q -> !any(isnan, q), qGrid)
+qProp::Vector{StaticArrays.SVector{6, Float64}} = qGrid[valid]
+qMap::Vector{Int64} = findall(valid)
+p::Int64 = length(qProp)
 
-# flagsBCR4BP_vec::Vector{Int64} = zeros(Int64, p*numAngles)
-# println("Propagating $(p*numAngles) BCR4BP trajectories with $(Threads.nthreads()) threads...")
-# for t::Int64 in 1:numAngles
-#     println("\tSun angle = $(thetaS[t]) ($t/$numAngles)...")
-#     Threads.@threads for j::Int64 in 1:p
-#         IC::Vector{Float64} = push!(collect(qProp[j]), thetaS[t])
-#         (arc::MBD.BCR4BP12Arc, event::Symbol) = propagateWithEvents(propagator, endEventsBCR4BP, IC, [0, pi*6.0], BCR4BPDynamicsModel, [BCR4BPDynamicsModel, r_H, r_E, r_M, Periapsis(0, [])])
-#         index::Int64 = (t-1)*p + j
-#         if (event == :earth) || (event == :moon)
-#             flagsBCR4BP_vec[index] = 7
-#         else
-#             e = String(event)
-#             if occursin("escape", e)
-#                 numPeris::RegexMatch{String} = match(r"\d+$", e)
-#                 tempFlag::Int64 = numPeris === nothing ? 6 : parse(Int64, numPeris.match)
-#                 flagsBCR4BP_vec[index] = (tempFlag > 6) ? 6 : tempFlag
-#             else
-#                 flagsBCR4BP_vec[index] = 6
-#             end
-#         end
-#     end
-# end
-# flagsBCR4BP::Vector{Vector{Int64}} = Vector{Vector{Int64}}(undef, numAngles)
-# for t::Int64 in 1:numAngles
-#     flagsBCR4BP[t] = fill(8, n^2)
-# end
-# for j::Int64 in 1:(p*numAngles)
-#     flagsBCR4BP[div(j-1, p)+1][qMap[mod1(j, p)]] = flagsBCR4BP_vec[j]
-# end
+flagsBCR4BP_vec::Vector{Int64} = zeros(Int64, p*numAngles)
+println("Propagating $(p*numAngles) BCR4BP trajectories with $(Threads.nthreads()) threads...")
+for t::Int64 in 1:numAngles
+    println("\tSun angle = $(thetaS[t]) ($t/$numAngles)...")
+    Threads.@threads for j::Int64 in 1:p
+        IC::Vector{Float64} = push!(collect(qProp[j]), thetaS[t])
+        (arc::MBD.BCR4BP12Arc, event::Symbol) = propagateWithEvents(propagator, endEventsBCR4BP, IC, [0, pi*6.0], BCR4BPDynamicsModel, [BCR4BPDynamicsModel, r_H, r_E, r_M, Periapsis(0, [])])
+        index::Int64 = (t-1)*p + j
+        if (event == :earth) || (event == :moon)
+            flagsBCR4BP_vec[index] = 7
+        else
+            e = String(event)
+            if occursin("escape", e)
+                numPeris::RegexMatch{String} = match(r"\d+$", e)
+                tempFlag::Int64 = numPeris === nothing ? 6 : parse(Int64, numPeris.match)
+                flagsBCR4BP_vec[index] = (tempFlag > 6) ? 6 : tempFlag
+            else
+                flagsBCR4BP_vec[index] = 6
+            end
+        end
+    end
+end
+flagsBCR4BP::Vector{Vector{Int64}} = Vector{Vector{Int64}}(undef, numAngles)
+for t::Int64 in 1:numAngles
+    flagsBCR4BP[t] = fill(8, n^2)
+end
+for j::Int64 in 1:(p*numAngles)
+    flagsBCR4BP[div(j-1, p)+1][qMap[mod1(j, p)]] = flagsBCR4BP_vec[j]
+end
 
-# flagsCR3BP_vec::Vector{Int64} = zeros(Int64, p)
-# println("Propagating $p CR3BP trajectories with $(Threads.nthreads()) threads...")
-# Threads.@threads for j::Int64 in 1:p
-#     IC::Vector{Float64} = collect(qProp[j])
-#     (arc::MBD.CR3BPArc, event::Symbol) = propagateWithEvents(propagator, endEventsCR3BP, IC, [0, pi*6.0], CR3BPDynamicsModel, [CR3BPDynamicsModel, r_H, r_E, r_M, Periapsis(0, [])])
-#     if (event == :earth) || (event == :moon)
-#         flagsCR3BP_vec[j] = 7
-#     else
-#         e = String(event)
-#         if occursin("escape", e)
-#             numPeris::RegexMatch{String} = match(r"\d+$", e)
-#             tempFlag::Int64 = numPeris === nothing ? 6 : parse(Int64, numPeris.match)
-#             flagsCR3BP_vec[j] = (tempFlag > 6) ? 6 : tempFlag
-#         else
-#             flagsCR3BP_vec[j] = 6
-#         end
-#     end
-# end
-# flagsCR3BP::Vector{Int64} = fill(8, n^2)
-# for j::Int64 in 1:p
-#     flagsCR3BP[qMap[j]] = flagsCR3BP_vec[j]
-# end
+flagsCR3BP_vec::Vector{Int64} = zeros(Int64, p)
+println("Propagating $p CR3BP trajectories with $(Threads.nthreads()) threads...")
+Threads.@threads for j::Int64 in 1:p
+    IC::Vector{Float64} = collect(qProp[j])
+    (arc::MBD.CR3BPArc, event::Symbol) = propagateWithEvents(propagator, endEventsCR3BP, IC, [0, pi*6.0], CR3BPDynamicsModel, [CR3BPDynamicsModel, r_H, r_E, r_M, Periapsis(0, [])])
+    if (event == :earth) || (event == :moon)
+        flagsCR3BP_vec[j] = 7
+    else
+        e = String(event)
+        if occursin("escape", e)
+            numPeris::RegexMatch{String} = match(r"\d+$", e)
+            tempFlag::Int64 = numPeris === nothing ? 6 : parse(Int64, numPeris.match)
+            flagsCR3BP_vec[j] = (tempFlag > 6) ? 6 : tempFlag
+        else
+            flagsCR3BP_vec[j] = 6
+        end
+    end
+end
+flagsCR3BP::Vector{Int64} = fill(8, n^2)
+for j::Int64 in 1:p
+    flagsCR3BP[qMap[j]] = flagsCR3BP_vec[j]
+end
 
 # targeter = PlanarPerpJCTargeter(CR3BPDynamicsModel)
 # familyFile::String = "FamilyData/CR3BPEML2Lyapunovs.csv"
@@ -221,57 +221,57 @@ endEventsCR3BP = DifferentialEquations.VectorContinuousCallback(endConditionsCR3
 # xMan::Vector{Float64} = reduce(vcat, xMan_thread)
 # yMan::Vector{Float64} = reduce(vcat, yMan_thread)
 
-n::Int64 = 500 #500
-numLevels::Int64 = 469 # 469
-JC::Vector{Float64} = collect(range(3.17, 2.0, numLevels))
-R_H::Float64 = lstar41*(BCR4BPSystemData.primaryData[1].mass/(3*(BCR4BPSystemData.primaryData[3].mass+BCR4BPSystemData.primaryData[1].mass)))^(1/3)
-r_H::Float64 = R_H/lstar12
-radius::Float64 = 1.25
-# radius::Float64 = 0.3
-x_M::Float64 = 1-mu12
-xGrid::Vector{Float64} = collect(range(-radius, radius, n))
-# xGrid::Vector{Float64} = collect(range(x_M-radius, x_M+radius, n))
-yGrid::Vector{Float64} = collect(range(-radius, radius, n))
-rGrid::Vector{Vector{Float64}} = [[x, y] for x in xGrid for y in yGrid]
-dGrid::Vector{Float64} = LinearAlgebra.norm.(rGrid)
-rhatGrid::Vector{Vector{Float64}} = [v ./ d for (v, d) in zip(rGrid, dGrid)]
-thatGrid::Vector{Vector{Float64}} = [StaticArrays.SVector(-v[2], v[1]) for v in rhatGrid] # Prograde
-# thatGrid::Vector{Vector{Float64}} = [StaticArrays.SVector(v[2], -v[1]) for v in rhatGrid] # Retrograde
-OmegaGrid::Vector{Float64} = map(q -> getPseudopotential(CR3BPDynamicsModel, push!(copy(q), 0.0)), rGrid)
-xPoint::Vector{Float64} = repeat(xGrid, inner = n)
-yPoint::Vector{Float64} = repeat(yGrid, outer = n)
-flagsCR3BPJC::Matrix{Int64} = fill(8, numLevels, n^2)
-println("Propagating up to $(n^2*numLevels) CR3BP trajectories with $(Threads.nthreads()) threads...")
-for l::Int64 in 1:numLevels
-    println("\tJC = $(JC[l]) ($l/$numLevels)...")
-    v2Grid::Vector{Float64} = 2 .* OmegaGrid .- JC[l]
-    v2Grid[v2Grid .< 0] .= NaN
-    vGrid::Vector{Float64} = sqrt.(v2Grid)
-    qGrid::Vector{StaticArrays.SVector{6, Float64}} = Vector{StaticArrays.SVector{6, Float64}}(undef, n^2)
-    for j::Int64 in 1:n^2
-        qGrid[j] = StaticArrays.SVector{6, Float64}(rGrid[j]..., 0.0, vGrid[j] .* thatGrid[j]..., 0.0)
-    end
-    valid = map(q -> !any(isnan, q), qGrid)
-    qProp::Vector{StaticArrays.SVector{6, Float64}} = qGrid[valid]
-    qMap::Vector{Int64} = findall(valid)
-    p::Int64 = length(qProp)
-    Threads.@threads for j::Int64 in 1:p
-        IC::Vector{Float64} = collect(qProp[j])
-        (arc::MBD.CR3BPArc, event::Symbol) = propagateWithEvents(propagator, endEventsCR3BP, IC, [0, pi*6.0], CR3BPDynamicsModel, [CR3BPDynamicsModel, r_H, r_E, r_M, Periapsis(0, [])])
-        if (event == :earth) || (event == :moon)
-            flagsCR3BPJC[l,qMap[j]] = 7
-        else
-            e = String(event)
-            if occursin("escape", e)
-                numPeris::RegexMatch{String} = match(r"\d+$", e)
-                tempFlag::Int64 = numPeris === nothing ? 6 : parse(Int64, numPeris.match)
-                flagsCR3BPJC[l,qMap[j]] = (tempFlag > 6) ? 6 : tempFlag
-            else
-                flagsCR3BPJC[l,qMap[j]] = 6
-            end
-        end
-    end
-end
+# n::Int64 = 500 #500
+# numLevels::Int64 = 469 # 469
+# JC::Vector{Float64} = collect(range(3.17, 2.0, numLevels))
+# R_H::Float64 = lstar41*(BCR4BPSystemData.primaryData[1].mass/(3*(BCR4BPSystemData.primaryData[3].mass+BCR4BPSystemData.primaryData[1].mass)))^(1/3)
+# r_H::Float64 = R_H/lstar12
+# radius::Float64 = 1.25
+# # radius::Float64 = 0.3
+# x_M::Float64 = 1-mu12
+# xGrid::Vector{Float64} = collect(range(-radius, radius, n))
+# # xGrid::Vector{Float64} = collect(range(x_M-radius, x_M+radius, n))
+# yGrid::Vector{Float64} = collect(range(-radius, radius, n))
+# rGrid::Vector{Vector{Float64}} = [[x, y] for x in xGrid for y in yGrid]
+# dGrid::Vector{Float64} = LinearAlgebra.norm.(rGrid)
+# rhatGrid::Vector{Vector{Float64}} = [v ./ d for (v, d) in zip(rGrid, dGrid)]
+# thatGrid::Vector{Vector{Float64}} = [StaticArrays.SVector(-v[2], v[1]) for v in rhatGrid] # Prograde
+# # thatGrid::Vector{Vector{Float64}} = [StaticArrays.SVector(v[2], -v[1]) for v in rhatGrid] # Retrograde
+# OmegaGrid::Vector{Float64} = map(q -> getPseudopotential(CR3BPDynamicsModel, push!(copy(q), 0.0)), rGrid)
+# xPoint::Vector{Float64} = repeat(xGrid, inner = n)
+# yPoint::Vector{Float64} = repeat(yGrid, outer = n)
+# flagsCR3BPJC::Matrix{Int64} = fill(8, numLevels, n^2)
+# println("Propagating up to $(n^2*numLevels) CR3BP trajectories with $(Threads.nthreads()) threads...")
+# for l::Int64 in 1:numLevels
+#     println("\tJC = $(JC[l]) ($l/$numLevels)...")
+#     v2Grid::Vector{Float64} = 2 .* OmegaGrid .- JC[l]
+#     v2Grid[v2Grid .< 0] .= NaN
+#     vGrid::Vector{Float64} = sqrt.(v2Grid)
+#     qGrid::Vector{StaticArrays.SVector{6, Float64}} = Vector{StaticArrays.SVector{6, Float64}}(undef, n^2)
+#     for j::Int64 in 1:n^2
+#         qGrid[j] = StaticArrays.SVector{6, Float64}(rGrid[j]..., 0.0, vGrid[j] .* thatGrid[j]..., 0.0)
+#     end
+#     valid = map(q -> !any(isnan, q), qGrid)
+#     qProp::Vector{StaticArrays.SVector{6, Float64}} = qGrid[valid]
+#     qMap::Vector{Int64} = findall(valid)
+#     p::Int64 = length(qProp)
+#     Threads.@threads for j::Int64 in 1:p
+#         IC::Vector{Float64} = collect(qProp[j])
+#         (arc::MBD.CR3BPArc, event::Symbol) = propagateWithEvents(propagator, endEventsCR3BP, IC, [0, pi*6.0], CR3BPDynamicsModel, [CR3BPDynamicsModel, r_H, r_E, r_M, Periapsis(0, [])])
+#         if (event == :earth) || (event == :moon)
+#             flagsCR3BPJC[l,qMap[j]] = 7
+#         else
+#             e = String(event)
+#             if occursin("escape", e)
+#                 numPeris::RegexMatch{String} = match(r"\d+$", e)
+#                 tempFlag::Int64 = numPeris === nothing ? 6 : parse(Int64, numPeris.match)
+#                 flagsCR3BPJC[l,qMap[j]] = (tempFlag > 6) ? 6 : tempFlag
+#             else
+#                 flagsCR3BPJC[l,qMap[j]] = 6
+#             end
+#         end
+#     end
+# end
 
 # sample::Int64 = 104762 # 102172
 # newJC::Float64 = 3.0
@@ -290,14 +290,14 @@ end
 
 MATLAB.put_variable(mf, :xPoints, xPoint)
 MATLAB.put_variable(mf, :yPoints, yPoint)
-# MATLAB.put_variable(mf, :flagsBCR4BP, flagsBCR4BP)
-# MATLAB.put_variable(mf, :flagsCR3BP, flagsCR3BP)
-# MATLAB.put_variable(mf, :JC, JC)
-# MATLAB.put_variable(mf, :thetaS, thetaS)
+MATLAB.put_variable(mf, :flagsBCR4BP, flagsBCR4BP)
+MATLAB.put_variable(mf, :flagsCR3BP, flagsCR3BP)
+MATLAB.put_variable(mf, :JC, JC)
+MATLAB.put_variable(mf, :thetaS, thetaS)
 # MATLAB.put_variable(mf, :xManifold, xMan)
 # MATLAB.put_variable(mf, :yManifold, yMan)
-MATLAB.put_variable(mf, :flagsCR3BPJC, flagsCR3BPJC)
-MATLAB.put_variable(mf, :JCs, JC)
+# MATLAB.put_variable(mf, :flagsCR3BPJC, flagsCR3BPJC)
+# MATLAB.put_variable(mf, :JCs, JC)
 MATLAB.close(mf)
 
 println()
