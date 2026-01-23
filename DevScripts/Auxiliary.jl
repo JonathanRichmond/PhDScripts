@@ -1,7 +1,7 @@
 """
 Auxiliary script for code development
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 U: 10/1/25
 """
 module Aux

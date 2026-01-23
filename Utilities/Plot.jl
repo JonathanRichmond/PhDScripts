@@ -1,7 +1,7 @@
 """
 Plot utility functions
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 6/3/25
 U: 6/11/25
 """

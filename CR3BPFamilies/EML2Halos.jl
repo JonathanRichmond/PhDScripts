@@ -1,7 +1,7 @@
 """
 Script for Earth-Moon CR3BP L2 southern halo orbit family
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 6/12/25
 U: 7/7/25
 """

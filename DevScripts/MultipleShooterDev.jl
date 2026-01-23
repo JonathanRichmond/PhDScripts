@@ -1,7 +1,7 @@
 """
 Script for multiple shooter code development
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 2/26/25
 U: 7/2/25
 """

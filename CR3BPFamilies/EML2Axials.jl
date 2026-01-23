@@ -1,7 +1,7 @@
 """
 Script for Earth-Moon CR3BP L2 northwestern axial orbit family
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 7/8/25
 """
 module EML2Axial

@@ -1,7 +1,7 @@
 """
 Script for BCR4BP Earth-Moon planar orbits
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 4/23/25
 U: 6/24/25
 """

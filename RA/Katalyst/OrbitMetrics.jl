@@ -1,7 +1,7 @@
 """
 Script for computing orbit metrics
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 6/30/25
 U: 7/2/25
 """

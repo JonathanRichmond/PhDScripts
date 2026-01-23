@@ -1,7 +1,7 @@
 """
 Jacobi constant axial crossing targeter for CR3BP spatial orbits
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 7/8/25
 """
 

@@ -1,7 +1,7 @@
 """
 Jacobi constant perpendicular crossing multiple shooter for CR3BP spatial orbits
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 2/26/25
 U: 7/16/25
 """

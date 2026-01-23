@@ -1,7 +1,7 @@
 """
 Period state continuity targeter for BCR4BP spatial orbits
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 6/25/25
 U: 7/9/25
 """

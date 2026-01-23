@@ -2,7 +2,7 @@
 Script for Earth-Moon CR3BP 3:2 prograde spatial resonant orbit family
     ***NEED TO CLASSIFY***
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 7/1/25
 U: 7/7/25
 """

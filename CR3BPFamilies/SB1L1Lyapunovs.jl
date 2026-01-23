@@ -1,7 +1,7 @@
 """
 Script for Sun-B1 CR3BP L1 Lyapunov orbit family
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 10/6/25
 """
 module SB1L1Lyap

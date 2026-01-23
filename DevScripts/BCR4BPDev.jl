@@ -1,7 +1,7 @@
 """
 Script for BCR4BP code development
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 2/19/25
 U: 5/29/25
 """

@@ -1,7 +1,7 @@
 """
 Script for computing visibility for constellations
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 7/21/25
 U: 7/22/25
 """

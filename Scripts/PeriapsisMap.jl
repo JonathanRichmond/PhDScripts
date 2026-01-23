@@ -1,7 +1,7 @@
 """
 Script for computing periapsis maps
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 10/9/25
 U: 12/2/25
 """

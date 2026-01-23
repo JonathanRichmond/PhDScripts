@@ -1,7 +1,7 @@
 """
 Period perpendicular crossing targeter for BCR4BP spatial orbits
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 6/11/25
 U: 7/9/25
 """

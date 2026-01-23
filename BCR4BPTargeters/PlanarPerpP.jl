@@ -1,7 +1,7 @@
 """
 Period perpendicular crossing targeter for BCR4BP planar orbits
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 4/9/25
 U: 7/9/25
 """

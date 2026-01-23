@@ -1,7 +1,7 @@
 """
 Export utility functions
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 2/19/25
 U: 11/3/25
 """

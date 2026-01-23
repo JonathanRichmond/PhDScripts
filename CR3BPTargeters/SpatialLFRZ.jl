@@ -1,7 +1,7 @@
 """
 Initial z-position targeter for CR3BP spatial lunar free returns
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 7/21/25
 """
 

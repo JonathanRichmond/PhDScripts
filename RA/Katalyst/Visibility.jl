@@ -1,7 +1,7 @@
 """
 Script for computing visibility
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 7/7/25
 U: 7/17/25
 """

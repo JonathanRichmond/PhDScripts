@@ -1,7 +1,7 @@
 """
 Script for Earth-Moon CR3BP Moon distant retrograde orbit family
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 6/30/25
 U: 7/7/25
 """

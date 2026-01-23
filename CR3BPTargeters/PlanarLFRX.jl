@@ -1,7 +1,7 @@
 """
 Initial x-position targeter for CR3BP planar lunar free returns
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 7/1/25
 U: 7/21/25
 """

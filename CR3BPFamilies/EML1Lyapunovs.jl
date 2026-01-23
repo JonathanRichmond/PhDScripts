@@ -1,7 +1,7 @@
 """
 Script for Earth-Moon CR3BP L1 Lyapunov orbit family
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 2/4/25
 U: 7/7/25
 """

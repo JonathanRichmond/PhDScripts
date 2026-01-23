@@ -2,7 +2,7 @@
 Script for Earth-Moon CR3BP 3:1 prograde resonant orbit family
     ***NEED TO CLASSIFY***
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 7/21/25
 """
 module EMRes31Pro

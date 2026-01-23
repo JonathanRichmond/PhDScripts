@@ -1,7 +1,7 @@
 """
 Script for Keplerian code development
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 9/22/25
 """
 module KepDev

@@ -1,7 +1,7 @@
 """
 Script for analyzing escape parameters and characteristics
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 9/22/25
 U: 10/24/25
 """

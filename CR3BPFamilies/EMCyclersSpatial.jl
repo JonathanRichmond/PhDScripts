@@ -1,7 +1,7 @@
 """
 Script for Earth-Moon CR3BP spatial cycler orbit family
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 7/2/25
 U: 7/16/25
 """

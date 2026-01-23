@@ -1,7 +1,7 @@
 """
 Period perpendicular crossing targeter for CR3BP planar orbits
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 6/30/25
 U: 7/7/25
 """

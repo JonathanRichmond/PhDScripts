@@ -1,7 +1,7 @@
 """
 Script for BCR4BP Earth-Moon spatial orbits
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 6/11/25
 U: 7/8/25
 """

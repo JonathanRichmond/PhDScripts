@@ -1,7 +1,7 @@
 """
 Visibility utility functions
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 7/16/25
 """
 

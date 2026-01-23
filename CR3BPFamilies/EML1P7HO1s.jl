@@ -2,7 +2,7 @@
 Script for Earth-Moon CR3BP L1 southern first P7 halo orbit family
     ***NEED TO CLASSIFY***
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 7/2/25
 U: 7/16/25
 """

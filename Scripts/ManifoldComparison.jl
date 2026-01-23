@@ -1,7 +1,7 @@
 """
 Script for comparing CR3BP and BCR4BP invariant and pseudo-manifolds
 
-Author: Jonathan Richmond
+Author: Jonathan LeFevre Richmond
 C: 6/10/25
 U: 10/24/25
 """
