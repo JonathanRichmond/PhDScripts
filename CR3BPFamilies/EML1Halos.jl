@@ -5,8 +5,8 @@ Author: Jonathan LeFevre Richmond
 C: 6/11/25
 U: 7/7/25
 """
-module EML1Halo
-println()
+# module EML1Halo
+println("Running EML1Halos.jl...\n")
 
 using MBD, GLMakie, Logging
 
@@ -41,7 +41,7 @@ addEndCheck!(continuationEngine, MoonEndCheck)
 family = MBD.CR3BPOrbitFamily(dynamicsModel)
 solutions::MBD.CR3BPContinuationFamily = doContinuation!(continuationEngine, solution1, solution2)
 lastOrbit::MBD.CR3BPPeriodicOrbit = getIndividualPeriodicOrbit(targeter, solutions, getNumMembers(solutions))
-println("Last Converged Orbit:\n\tIC:\t$(lastOrbit.initialCondition)\n\tP:\t$(lastOrbit.period)\n\tJC:\t$(getJacobiConstant(lastOrbit))\n")
+println("\nLast Converged Orbit:\n\tIC:\t$(lastOrbit.initialCondition)\n\tP:\t$(lastOrbit.period)\n\tJC:\t$(getJacobiConstant(lastOrbit))\n")
 
 for s::Int64 in 1:getNumMembers(solutions)
     orbit::MBD.CR3BPPeriodicOrbit = getIndividualPeriodicOrbit(targeter, solutions, s)
@@ -59,7 +59,7 @@ eigenSort!(family)
 # println("Test Orbit:\n\tIC:\t$(testOrbit.initialCondition)\n\tP:\t$(testOrbit.period)\n\tJC:\t$(getJacobiConstant(testOrbit))\n")
 
 # println("Plotting orbit...")
-# plotOrbit::Int64 = getNumMembers(family)
+# plotOrbit::Int64 = 200
 # orbitArc::MBD.CR3BPArc = propagate(propagator, family.initialConditions[plotOrbit], [0, family.periods[plotOrbit]], dynamicsModel)
 # xData::Vector{Float64}, yData::Vector{Float64}, zData::Vector{Float64} = Vector{Float64}(undef, getStateCount(orbitArc)), Vector{Float64}(undef, getStateCount(orbitArc)), Vector{Float64}(undef, getStateCount(orbitArc))
 # for s::Int64 in 1:getStateCount(orbitArc)
@@ -73,4 +73,4 @@ eigenSort!(family)
 # GLMakie.Legend(figure[1,2], axis)
 
 println()
-end
+# end
