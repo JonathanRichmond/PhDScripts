@@ -3,15 +3,15 @@ Export utility functions
 
 Author: Jonathan LeFevre Richmond
 C: 2/19/25
-U: 11/3/25
+U: 1/30/26
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, MATLAB
 
 export CSVExportCR3BPFamily, exportArrays, exportBCR4BP12Manifold, exportBCR4BP12Orbit
-export exportBCR4BP12Trajectory, exportBCR4BP41Trajectory, exportCR3BPManifold, exportCR3BPOrbit
-export exportCR3BPTrajectory, exportInertialTrajectory, exportPseudoManifold, fullExportCR3BPFamily
-export MATExportCR3BPOrbFamily, MATExportCR3BPTrajFamily
+export exportBCR4BP12Trajectory, exportBCR4BP41Trajectory, exportCR3BPManifold, exportCR3BPMMAT
+export exportCR3BPOrbit, exportCR3BPTrajectory, exportInertialTrajectory, exportPseudoManifold
+export fullExportCR3BPFamily, MATExportCR3BPOrbFamily, MATExportCR3BPTrajFamily
 
 """
     Arrays(vectors)
@@ -165,6 +165,33 @@ struct BCR4BP41Traj
 end
 
 """
+    Conic(dynamicsModel, oe, TOF)
+
+Keplerian conic export object
+
+# Arguments
+- `dynamicsModel::KDynamicsModel`: Keplerian dynamics model object
+- `oe::Vector{Float64}`: Initial orbital elements [dim]
+- `TOF::Float64`: Time-of-flight [s]
+"""
+struct Conic
+    a::Float64                                                          # Semi-major axis [km]
+    e::Float64                                                          # Eccentricity [ndim]
+    i::Float64                                                          # Inclination [rad]
+    Omega::Float64                                                      # RAAN [rad]
+    omega::Float64                                                      # Argument of periapsis [rad]
+    state::Vector{Float64}                                              # Cartesian state [dim]
+    theta_0::Float64                                                    # Initial true anomaly [rad]
+    TOF::Float64                                                        # Time-of-flight [s]
+
+    function Conic(dynamicsModel::MBD.KDynamicsModel, oe::Vector{Float64}, TOF::Float64)
+        this = new(oe[1], oe[2], oe[3], oe[4], oe[5], getCartesianState(dynamicsModel, oe), oe[6], TOF)
+
+        return this
+    end
+end
+
+"""
     CR3BPOrb(x, y, z, xdot, ydot, zdot, t, P, JC, varsig)
 
 CR3BP orbit export object
@@ -229,6 +256,54 @@ struct CR3BPTraj
 
     function CR3BPTraj(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, t::Vector{Float64}, TOF::Float64, JC::Float64)
         this = new(JC, TOF, t, x, xdot, y, ydot, z, zdot)
+
+        return this
+    end
+end
+
+"""
+    CR3BPMMAT(initialEpoch, t_0, theta_dep_0, theta_arr_f, theta_arr_0, departureOrbit, departureManifoldArc1, departureManifoldArc2, departureConic, bridgeConic, arrivalConic, arrivalManifoldArc, arrivalOrbit, Deltav_1, Deltav_2, TOF)
+
+CR3BP MMAT export object
+
+# Arguments
+- `initialEpoch::String`: Initial epoch
+- `t_0::Float64`: Departure time from initial epoch [s]
+- `theta_dep_0::Float64`: Initial departure body true anomaly [rad]
+- `theta_arr_f::Float64`: Final arrival body true anomaly [rad]
+- `theta_arr_0::Float64`: Initial arrival body true anomaly [rad]
+- `departureOrbit::CR3BPOrb`: Departure CR3BP orbit object
+- `departureManifoldArc1::CR3BPTraj`: Departure CR3BP manifold arc trajectory object
+- `departureManifoldArc2::CR3BPTraj`: Intermediate CR3BP manifold arc trajectory object
+- `departureConic::Conic`: Departure Keplerian conic object
+- `bridgeConic::Conic`: Bridge Keplerian conic object
+- `arrivalConic::Conic`: Arrival Keplerian conic object
+- `arrivalManifoldArc::CR3BPTraj`: Arrival CR3BP manifold arc trajectory object
+- `arrivalOrbit::CR3BPOrb`: Arrival CR3BP orbit object
+- `Deltav_1::Float64`: First maneuver magnitude [km/s]
+- `Deltav_2::Float64`: Second maneuver magnitude [km/s]
+- `TOF::Float64`: Total transfer time-of-flight [s]
+"""
+struct CR3BPMMAT
+    arrivalConic::Conic                                                 # Arrival conic object
+    arrivalManifoldArc::CR3BPTraj                                       # Arrival manifold arc trajectory object
+    arrivalOrbit::CR3BPOrb                                              # Arrival orbit object
+    bridgeConic::Conic                                                  # Bridge conic object
+    Deltav_1::Float64                                                   # First maneuver magnitude [km/s]
+    Deltav_2::Float64                                                   # Second maneuver magnitude [km/s]
+    departureConic::Conic                                               # Departure conic object
+    departureManifoldArc1::CR3BPTraj                                    # Departure manifold arc trajectory object
+    departureManifoldArc2::CR3BPTraj                                    # Intermediate manifold arc trajectory object
+    departureOrbit::CR3BPOrb                                            # Departure orbit object
+    initialEpoch::String                                                # Initial epoch
+    theta_arr_f::Float64                                                # Final arrival body true anomaly [rad]
+    theta_arr_0::Float64                                                # Initial arrival body true anomlay [rad]
+    theta_dep_0::Float64                                                # Initial departure body true anomaly [rad]
+    TOF::Float64                                                        # Transfer time-of-flight [s]
+    t_0::Float64                                                        # Departure time from initial epoch [s]
+
+    function CR3BPMMAT(initialEpoch::String, t_0::Float64, theta_dep_0::Float64, theta_arr_f::Float64, theta_arr_0::Float64, departureOrbit::CR3BPOrb, departureManifoldArc1::CR3BPTraj, departureManifoldArc2::CR3BPTraj, departureConic::Conic, bridgeConic::Conic, arrivalConic::Conic, arrivalManifoldArc::CR3BPTraj, arrivalOrbit::CR3BPOrb, Deltav_1::Float64, Deltav_2::Float64, TOF::Float64)
+        this = new(arrivalConic, arrivalManifoldArc, arrivalOrbit, bridgeConic, Deltav_1, Deltav_2, departureConic, departureManifoldArc1, departureManifoldArc2, departureOrbit, initialEpoch, theta_arr_f, theta_arr_0, theta_dep_0, TOF, t_0)
 
         return this
     end
@@ -942,6 +1017,153 @@ function exportCR3BPManifold(manifold::MBD.CR3BPManifold, manifoldArcs::Vector{M
     end
     man = CR3BPMan(orb, arcs, manifold.TOF)
     MATLAB.put_variable(file, name, man)
+end
+
+"""
+    exportCR3BPMMAT(initialEpoch, t_0, theta_dep_0, theta_arr_f, theta_arr_0, departureManifoldArc, intermediateManifoldArc, KepDynamicsModel, oe_dep_SoI, t_depConic, oe_bridge_peri, t_bridgeConic, oe_arr_int, t_arrConic, arrivalManifoldArc, Deltav_1, Deltav_2, TOF, file, name)
+
+Export CR3BP MMAT data to MAT file
+
+# Arguments
+- `initialEpoch::String`: Initial epoch
+- `t_0::Float64`: Departure time from initial epoch [s]
+- `theta_dep_0::Float64`: Initial departure body true anomaly [rad]
+- `theta_arr_f::Float64`: Final arrival body true anomaly [rad]
+- `theta_arr_0::Float64`: Initial arrival body true anomaly [rad]
+- `departureManifoldArc::CR3BPManifoldArc`: Departure CR3BP manifold arc object
+- `intermediateManifoldArc::CR3BPArc`: Intermediate CR3BP arc object
+- `KepDynamicsModel::KDynamicsModel`: Keplerian dynamics model object
+- `oe_dep_SoI::Vector{Float64}`: Dearture conic orbital elements at SoI [dim]
+- `t_depConic::Float64`: Departure conic TOF [s]
+- `oe_bridge_peri::Vector{Float64}`: Bridge conic orbital elements at periapsis [dim]
+- `t_bridgeConic::Float64`: Bridge conic TOF [s]
+- `oe_arr_int::Vector{Float64}`: Arrival conic orbital elements at intersection [dim]
+- `t_arrConic::Float64`: Arrival conic TOF [s]
+- `arrivalManifoldArc::CR3BPManifoldArc`: Arrival CR3BP manifold arc object
+- `Deltav_1::Float64`: First maneuver magnitude [km/s]
+- `Deltav_2::Float64`: Second maneuver magnitude [km/s]
+- `TOF::Float64`: Total transfer time-fo-flight [s]
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportCR3BPMMAT(initialEpoch::String, t_0::Float64, theta_dep_0::Float64, theta_arr_f::Float64, theta_arr_0::Float64, departureManifoldArc::MBD.CR3BPManifoldArc, intermediateManifoldArc::MBD.CR3BPArc, KepDynamicsModel::MBD.KDynamicsModel, oe_dep_SoI::Vector{Float64}, t_depConic::Float64, oe_bridge_peri::Vector{Float64}, t_bridgeConic::Float64, oe_arr_int::Vector{Float64}, t_arrConic::Float64, arrivalManifoldArc::MBD.CR3BPManifoldArc, Deltav_1::Float64, Deltav_2::Float64, TOF::Float64, file::MATLAB.MatFile, name::Symbol)
+    propagator = MBD.Propagator()
+    departureOrbitArc::MBD.CR3BPArc = propagate(propagator, departureManifoldArc.periodicOrbit.initialCondition, [0, departureManifoldArc.periodicOrbit.period], departureManifoldArc.periodicOrbit.dynamicsModel)
+    departureOrbitnStates::Int64 = getStateCount(departureOrbitArc)
+    departureOrbitx::Vector{Float64} = zeros(Float64, departureOrbitnStates)
+    departureOrbity::Vector{Float64} = zeros(Float64, departureOrbitnStates)
+    departureOrbitz::Vector{Float64} = zeros(Float64, departureOrbitnStates)
+    departureOrbitxdot::Vector{Float64} = zeros(Float64, departureOrbitnStates)
+    departureOrbitydot::Vector{Float64} = zeros(Float64, departureOrbitnStates)
+    departureOrbitzdot::Vector{Float64} = zeros(Float64, departureOrbitnStates)
+    departureOrbitt::Vector{Float64} = zeros(Float64, departureOrbitnStates)
+    for s::Int64 in 1:departureOrbitnStates
+        state::Vector{Float64} = getStateByIndex(departureOrbitArc, s)
+        departureOrbitx[s] = state[1]
+        departureOrbity[s] = state[2]
+        departureOrbitz[s] = state[3]
+        departureOrbitxdot[s] = state[4]
+        departureOrbitydot[s] = state[5]
+        departureOrbitzdot[s] = state[6]
+        departureOrbitt[s] = getTimeByIndex(departureOrbitArc, s)
+    end
+    departureJC::Float64 = getJacobiConstant(departureManifoldArc)
+    departureOrbitvarsig::Float64 = getStabilityIndex(departureManifoldArc.periodicOrbit)
+    departureOrb = CR3BPOrb(departureOrbitx, departureOrbity, departureOrbitz, departureOrbitxdot, departureOrbitydot, departureOrbitzdot, departureOrbitt, departureManifoldArc.periodicOrbit.period, departureJC, departureOrbitvarsig)
+
+    departureTrajArc::MBD.CR3BPArc = propagate(propagator, real(departureManifoldArc.initialCondition), [0, departureManifoldArc.TOF], departureManifoldArc.periodicOrbit.dynamicsModel)
+    departureTrajnStates::Int64 = getStateCount(departureTrajArc)
+    departureTrajx::Vector{Float64} = zeros(Float64, departureTrajnStates)
+    departureTrajy::Vector{Float64} = zeros(Float64, departureTrajnStates)
+    departureTrajz::Vector{Float64} = zeros(Float64, departureTrajnStates)
+    departureTrajxdot::Vector{Float64} = zeros(Float64, departureTrajnStates)
+    departureTrajydot::Vector{Float64} = zeros(Float64, departureTrajnStates)
+    departureTrajzdot::Vector{Float64} = zeros(Float64, departureTrajnStates)
+    departureTrajt::Vector{Float64} = zeros(Float64, departureTrajnStates)
+    for s::Int64 in 1:departureTrajnStates
+        state::Vector{Float64} = getStateByIndex(departureTrajArc, s)
+        departureTrajx[s] = state[1]
+        departureTrajy[s] = state[2]
+        departureTrajz[s] = state[3]
+        departureTrajxdot[s] = state[4]
+        departureTrajydot[s] = state[5]
+        departureTrajzdot[s] = state[6]
+        departureTrajt[s] = getTimeByIndex(departureTrajArc, s)
+    end
+    departureManifoldTraj1 = CR3BPTraj(departureTrajx, departureTrajy, departureTrajz, departureTrajxdot, departureTrajydot, departureTrajzdot, departureTrajt, departureManifoldArc.TOF, departureJC)
+
+    intermediateTrajnStates::Int64 = getStateCount(intermediateManifoldArc)
+    intermediateTrajx::Vector{Float64} = zeros(Float64, intermediateTrajnStates)
+    intermediateTrajy::Vector{Float64} = zeros(Float64, intermediateTrajnStates)
+    intermediateTrajz::Vector{Float64} = zeros(Float64, intermediateTrajnStates)
+    intermediateTrajxdot::Vector{Float64} = zeros(Float64, intermediateTrajnStates)
+    intermediateTrajydot::Vector{Float64} = zeros(Float64, intermediateTrajnStates)
+    intermediateTrajzdot::Vector{Float64} = zeros(Float64, intermediateTrajnStates)
+    intermediateTrajt::Vector{Float64} = zeros(Float64, intermediateTrajnStates)
+    for s::Int64 in 1:intermediateTrajnStates
+        state::Vector{Float64} = getStateByIndex(intermediateManifoldArc, s)
+        intermediateTrajx[s] = state[1]
+        intermediateTrajy[s] = state[2]
+        intermediateTrajz[s] = state[3]
+        intermediateTrajxdot[s] = state[4]
+        intermediateTrajydot[s] = state[5]
+        intermediateTrajzdot[s] = state[6]
+        intermediateTrajt[s] = getTimeByIndex(intermediateManifoldArc, s)
+    end
+    intermediateTrajTOF::Float64 = getTimeByIndex(intermediateManifoldArc, -1)-getTimeByIndex(intermediateManifoldArc, 1)
+    intermediateTrajJC::Float64 = getJacobiConstant(intermediateManifoldArc.dynamicsModel, getStateByIndex(intermediateManifoldArc, 1))
+    departureManifoldTraj2 = CR3BPTraj(intermediateTrajx, intermediateTrajy, intermediateTrajz, intermediateTrajxdot, intermediateTrajydot, intermediateTrajzdot, intermediateTrajt, intermediateTrajTOF, intermediateTrajJC)
+
+    departureConic = Conic(KepDynamicsModel, oe_dep_SoI, t_depConic)
+    bridgeConic = Conic(KepDynamicsModel, oe_bridge_peri, t_bridgeConic)
+    arrivalConic = Conic(KepDynamicsModel, oe_arr_int, t_arrConic)
+
+    arrivalOrbitArc::MBD.CR3BPArc = propagate(propagator, arrivalManifoldArc.periodicOrbit.initialCondition, [0, arrivalManifoldArc.periodicOrbit.period], arrivalManifoldArc.periodicOrbit.dynamicsModel)
+    arrivalOrbitnStates::Int64 = getStateCount(arrivalOrbitArc)
+    arrivalOrbitx::Vector{Float64} = zeros(Float64, arrivalOrbitnStates)
+    arrivalOrbity::Vector{Float64} = zeros(Float64, arrivalOrbitnStates)
+    arrivalOrbitz::Vector{Float64} = zeros(Float64, arrivalOrbitnStates)
+    arrivalOrbitxdot::Vector{Float64} = zeros(Float64, arrivalOrbitnStates)
+    arrivalOrbitydot::Vector{Float64} = zeros(Float64, arrivalOrbitnStates)
+    arrivalOrbitzdot::Vector{Float64} = zeros(Float64, arrivalOrbitnStates)
+    arrivalOrbitt::Vector{Float64} = zeros(Float64, arrivalOrbitnStates)
+    for s::Int64 in 1:arrivalOrbitnStates
+        state::Vector{Float64} = getStateByIndex(arrivalOrbitArc, s)
+        arrivalOrbitx[s] = state[1]
+        arrivalOrbity[s] = state[2]
+        arrivalOrbitz[s] = state[3]
+        arrivalOrbitxdot[s] = state[4]
+        arrivalOrbitydot[s] = state[5]
+        arrivalOrbitzdot[s] = state[6]
+        arrivalOrbitt[s] = getTimeByIndex(arrivalOrbitArc, s)
+    end
+    arrivalJC::Float64 = getJacobiConstant(arrivalManifoldArc)
+    arrivalOrbitvarsig::Float64 = getStabilityIndex(arrivalManifoldArc.periodicOrbit)
+    arrivalOrb = CR3BPOrb(arrivalOrbitx, arrivalOrbity, arrivalOrbitz, arrivalOrbitxdot, arrivalOrbitydot, arrivalOrbitzdot, arrivalOrbitt, arrivalManifoldArc.periodicOrbit.period, arrivalJC, arrivalOrbitvarsig)
+
+    arrivalTrajArc::MBD.CR3BPArc = propagate(propagator, real(arrivalManifoldArc.initialCondition), [0, arrivalManifoldArc.TOF], arrivalManifoldArc.periodicOrbit.dynamicsModel)
+    arrivalTrajnStates::Int64 = getStateCount(arrivalTrajArc)
+    arrivalTrajx::Vector{Float64} = zeros(Float64, arrivalTrajnStates)
+    arrivalTrajy::Vector{Float64} = zeros(Float64, arrivalTrajnStates)
+    arrivalTrajz::Vector{Float64} = zeros(Float64, arrivalTrajnStates)
+    arrivalTrajxdot::Vector{Float64} = zeros(Float64, arrivalTrajnStates)
+    arrivalTrajydot::Vector{Float64} = zeros(Float64, arrivalTrajnStates)
+    arrivalTrajzdot::Vector{Float64} = zeros(Float64, arrivalTrajnStates)
+    arrivalTrajt::Vector{Float64} = zeros(Float64, arrivalTrajnStates)
+    for s::Int64 in 1:arrivalTrajnStates
+        state::Vector{Float64} = getStateByIndex(arrivalTrajArc, s)
+        arrivalTrajx[s] = state[1]
+        arrivalTrajy[s] = state[2]
+        arrivalTrajz[s] = state[3]
+        arrivalTrajxdot[s] = state[4]
+        arrivalTrajydot[s] = state[5]
+        arrivalTrajzdot[s] = state[6]
+        arrivalTrajt[s] = getTimeByIndex(arrivalTrajArc, s)
+    end
+    arrivalManifoldTraj = CR3BPTraj(arrivalTrajx, arrivalTrajy, arrivalTrajz, arrivalTrajxdot, arrivalTrajydot, arrivalTrajzdot, arrivalTrajt, arrivalManifoldArc.TOF, arrivalJC)
+
+    transfer = CR3BPMMAT(initialEpoch, t_0, theta_dep_0, theta_arr_f, theta_arr_0, departureOrb, departureManifoldTraj1, departureManifoldTraj2, departureConic, bridgeConic, arrivalConic, arrivalManifoldTraj, arrivalOrb, Deltav_1, Deltav_2, TOF)
+    MATLAB.put_variable(file, name, transfer)
 end
 
 """
