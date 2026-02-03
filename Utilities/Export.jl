@@ -3,7 +3,7 @@ Export utility functions
 
 Author: Jonathan LeFevre Richmond
 C: 2/19/25
-U: 1/30/26
+U: 2/2/26
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, MATLAB
@@ -1020,35 +1020,30 @@ function exportCR3BPManifold(manifold::MBD.CR3BPManifold, manifoldArcs::Vector{M
 end
 
 """
-    exportCR3BPMMAT(initialEpoch, t_0, theta_dep_0, theta_arr_f, theta_arr_0, departureManifoldArc, intermediateManifoldArc, KepDynamicsModel, oe_dep_SoI, t_depConic, oe_bridge_peri, t_bridgeConic, oe_arr_int, t_arrConic, arrivalManifoldArc, Deltav_1, Deltav_2, TOF, file, name)
+    exportCR3BPMMAT(env, t_0, intersect, theta_dep_0, theta_arr_f, theta_arr_0, departureManifoldArc, intermediateManifoldArc, oe_dep_SoI, t_depConic, oe_bridge_peri, arrivalManifoldArc, Deltav_1, TOF, file, name)
 
 Export CR3BP MMAT data to MAT file
 
 # Arguments
-- `initialEpoch::String`: Initial epoch
+- `env::MMATEnv`: MMAT environment object
 - `t_0::Float64`: Departure time from initial epoch [s]
+- `intersect::Vector{Float64}`: Intersect data
 - `theta_dep_0::Float64`: Initial departure body true anomaly [rad]
 - `theta_arr_f::Float64`: Final arrival body true anomaly [rad]
 - `theta_arr_0::Float64`: Initial arrival body true anomaly [rad]
 - `departureManifoldArc::CR3BPManifoldArc`: Departure CR3BP manifold arc object
 - `intermediateManifoldArc::CR3BPArc`: Intermediate CR3BP arc object
-- `KepDynamicsModel::KDynamicsModel`: Keplerian dynamics model object
 - `oe_dep_SoI::Vector{Float64}`: Dearture conic orbital elements at SoI [dim]
 - `t_depConic::Float64`: Departure conic TOF [s]
 - `oe_bridge_peri::Vector{Float64}`: Bridge conic orbital elements at periapsis [dim]
-- `t_bridgeConic::Float64`: Bridge conic TOF [s]
-- `oe_arr_int::Vector{Float64}`: Arrival conic orbital elements at intersection [dim]
-- `t_arrConic::Float64`: Arrival conic TOF [s]
 - `arrivalManifoldArc::CR3BPManifoldArc`: Arrival CR3BP manifold arc object
 - `Deltav_1::Float64`: First maneuver magnitude [km/s]
-- `Deltav_2::Float64`: Second maneuver magnitude [km/s]
 - `TOF::Float64`: Total transfer time-fo-flight [s]
 - `file::MatFile`: MAT file
 - `name::Symbol`: Export object name
 """
-function exportCR3BPMMAT(initialEpoch::String, t_0::Float64, theta_dep_0::Float64, theta_arr_f::Float64, theta_arr_0::Float64, departureManifoldArc::MBD.CR3BPManifoldArc, intermediateManifoldArc::MBD.CR3BPArc, KepDynamicsModel::MBD.KDynamicsModel, oe_dep_SoI::Vector{Float64}, t_depConic::Float64, oe_bridge_peri::Vector{Float64}, t_bridgeConic::Float64, oe_arr_int::Vector{Float64}, t_arrConic::Float64, arrivalManifoldArc::MBD.CR3BPManifoldArc, Deltav_1::Float64, Deltav_2::Float64, TOF::Float64, file::MATLAB.MatFile, name::Symbol)
-    propagator = MBD.Propagator()
-    departureOrbitArc::MBD.CR3BPArc = propagate(propagator, departureManifoldArc.periodicOrbit.initialCondition, [0, departureManifoldArc.periodicOrbit.period], departureManifoldArc.periodicOrbit.dynamicsModel)
+function exportCR3BPMMAT(env::MMATEnv, t_0::Float64, intersect::Vector{Float64}, theta_dep_0::Float64, theta_arr_f::Float64, theta_arr_0::Float64, departureManifoldArc::MBD.CR3BPManifoldArc, intermediateManifoldArc::MBD.CR3BPArc, oe_dep_SoI::Vector{Float64}, t_depConic::Float64, oe_bridge_peri::Vector{Float64}, arrivalManifoldArc::MBD.CR3BPManifoldArc, Deltav_1::Float64, TOF::Float64, file::MATLAB.MatFile, name::Symbol)
+    departureOrbitArc::MBD.CR3BPArc = propagate(env.propagator, departureManifoldArc.periodicOrbit.initialCondition, [0, departureManifoldArc.periodicOrbit.period], departureManifoldArc.periodicOrbit.dynamicsModel)
     departureOrbitnStates::Int64 = getStateCount(departureOrbitArc)
     departureOrbitx::Vector{Float64} = zeros(Float64, departureOrbitnStates)
     departureOrbity::Vector{Float64} = zeros(Float64, departureOrbitnStates)
@@ -1071,7 +1066,7 @@ function exportCR3BPMMAT(initialEpoch::String, t_0::Float64, theta_dep_0::Float6
     departureOrbitvarsig::Float64 = getStabilityIndex(departureManifoldArc.periodicOrbit)
     departureOrb = CR3BPOrb(departureOrbitx, departureOrbity, departureOrbitz, departureOrbitxdot, departureOrbitydot, departureOrbitzdot, departureOrbitt, departureManifoldArc.periodicOrbit.period, departureJC, departureOrbitvarsig)
 
-    departureTrajArc::MBD.CR3BPArc = propagate(propagator, real(departureManifoldArc.initialCondition), [0, departureManifoldArc.TOF], departureManifoldArc.periodicOrbit.dynamicsModel)
+    departureTrajArc::MBD.CR3BPArc = propagate(env.propagator, real(departureManifoldArc.initialCondition), [0, departureManifoldArc.TOF], departureManifoldArc.periodicOrbit.dynamicsModel)
     departureTrajnStates::Int64 = getStateCount(departureTrajArc)
     departureTrajx::Vector{Float64} = zeros(Float64, departureTrajnStates)
     departureTrajy::Vector{Float64} = zeros(Float64, departureTrajnStates)
@@ -1114,11 +1109,11 @@ function exportCR3BPMMAT(initialEpoch::String, t_0::Float64, theta_dep_0::Float6
     intermediateTrajJC::Float64 = getJacobiConstant(intermediateManifoldArc.dynamicsModel, getStateByIndex(intermediateManifoldArc, 1))
     departureManifoldTraj2 = CR3BPTraj(intermediateTrajx, intermediateTrajy, intermediateTrajz, intermediateTrajxdot, intermediateTrajydot, intermediateTrajzdot, intermediateTrajt, intermediateTrajTOF, intermediateTrajJC)
 
-    departureConic = Conic(KepDynamicsModel, oe_dep_SoI, t_depConic)
-    bridgeConic = Conic(KepDynamicsModel, oe_bridge_peri, t_bridgeConic)
-    arrivalConic = Conic(KepDynamicsModel, oe_arr_int, t_arrConic)
+    departureConic = Conic(env.SDynamicsModel, oe_dep_SoI, t_depConic)
+    bridgeConic = Conic(env.SDynamicsModel, oe_bridge_peri, intersect[1])
+    arrivalConic = Conic(env.SDynamicsModel, intersect[3:8], intersect[9])
 
-    arrivalOrbitArc::MBD.CR3BPArc = propagate(propagator, arrivalManifoldArc.periodicOrbit.initialCondition, [0, arrivalManifoldArc.periodicOrbit.period], arrivalManifoldArc.periodicOrbit.dynamicsModel)
+    arrivalOrbitArc::MBD.CR3BPArc = propagate(env.propagator, arrivalManifoldArc.periodicOrbit.initialCondition, [0, arrivalManifoldArc.periodicOrbit.period], arrivalManifoldArc.periodicOrbit.dynamicsModel)
     arrivalOrbitnStates::Int64 = getStateCount(arrivalOrbitArc)
     arrivalOrbitx::Vector{Float64} = zeros(Float64, arrivalOrbitnStates)
     arrivalOrbity::Vector{Float64} = zeros(Float64, arrivalOrbitnStates)
@@ -1141,7 +1136,7 @@ function exportCR3BPMMAT(initialEpoch::String, t_0::Float64, theta_dep_0::Float6
     arrivalOrbitvarsig::Float64 = getStabilityIndex(arrivalManifoldArc.periodicOrbit)
     arrivalOrb = CR3BPOrb(arrivalOrbitx, arrivalOrbity, arrivalOrbitz, arrivalOrbitxdot, arrivalOrbitydot, arrivalOrbitzdot, arrivalOrbitt, arrivalManifoldArc.periodicOrbit.period, arrivalJC, arrivalOrbitvarsig)
 
-    arrivalTrajArc::MBD.CR3BPArc = propagate(propagator, real(arrivalManifoldArc.initialCondition), [0, arrivalManifoldArc.TOF], arrivalManifoldArc.periodicOrbit.dynamicsModel)
+    arrivalTrajArc::MBD.CR3BPArc = propagate(env.propagator, real(arrivalManifoldArc.initialCondition), [0, arrivalManifoldArc.TOF], arrivalManifoldArc.periodicOrbit.dynamicsModel)
     arrivalTrajnStates::Int64 = getStateCount(arrivalTrajArc)
     arrivalTrajx::Vector{Float64} = zeros(Float64, arrivalTrajnStates)
     arrivalTrajy::Vector{Float64} = zeros(Float64, arrivalTrajnStates)
@@ -1162,7 +1157,7 @@ function exportCR3BPMMAT(initialEpoch::String, t_0::Float64, theta_dep_0::Float6
     end
     arrivalManifoldTraj = CR3BPTraj(arrivalTrajx, arrivalTrajy, arrivalTrajz, arrivalTrajxdot, arrivalTrajydot, arrivalTrajzdot, arrivalTrajt, arrivalManifoldArc.TOF, arrivalJC)
 
-    transfer = CR3BPMMAT(initialEpoch, t_0, theta_dep_0, theta_arr_f, theta_arr_0, departureOrb, departureManifoldTraj1, departureManifoldTraj2, departureConic, bridgeConic, arrivalConic, arrivalManifoldTraj, arrivalOrb, Deltav_1, Deltav_2, TOF)
+    transfer = CR3BPMMAT(env.initialEpoch, t_0, theta_dep_0, theta_arr_f, theta_arr_0, departureOrb, departureManifoldTraj1, departureManifoldTraj2, departureConic, bridgeConic, arrivalConic, arrivalManifoldTraj, arrivalOrb, Deltav_1, intersect[2], TOF)
     MATLAB.put_variable(file, name, transfer)
 end
 
