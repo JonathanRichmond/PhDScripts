@@ -7,7 +7,7 @@ U: 2/3/26
 """
 # module MMMATCR3BP
 
-using MBD, DifferentialEquations, Logging, MATLAB, SPICE
+using MBD, DifferentialEquations, Ephemerides, Logging, MATLAB, SPICE
 
 global_logger(ConsoleLogger(stderr, Logging.Warn)) # Debug, Info, Warn, Error
 
@@ -65,15 +65,17 @@ function setupEnvironment()::MMATEnv
 
     initialEpoch::String = "Jan 1 2030"
     initialEpochTime::Float64 = SPICE.str2et(initialEpoch)
-    days::Vector{Float64} = [0.0, 15.0]
-    # days::Vector{Float64} = collect(0.0:5.0:30.0)
+    # days::Vector{Float64} = [0.0]
+    days::Vector{Float64} = collect(0.0:36.0:360.0)
+    epochTimes::Vector{Float64} = initialEpochTime .+ days .* 3600 .* 24
+    epochs::Vector{String} = [SPICE.et2utc(et, "C", 0) for et in epochTimes]
 
     q_E_0::Vector{Float64} = getEphemerides(initialEpoch, [0.0], "Earth", "Sun", "ECLIPJ2000")[1][1]
     q_M_0::Vector{Float64} = getEphemerides(initialEpoch, [0.0], "Mars", "Sun", "ECLIPJ2000")[1][1]
     oe_E::Vector{Float64} = SPICE.oscltx(q_E_0, initialEpochTime, Sun.gravParam)
     oe_M::Vector{Float64} = SPICE.oscltx(q_M_0, initialEpochTime, Sun.gravParam)
 
-    return MMATEnv(EMDynamicsModel, SDynamicsModel, SEDynamicsModel, SMDynamicsModel, Earth, Mars, Moon, Sun, charValues, momentumPropagator, orbitDepartureEvent, propagator, P1DistanceEvent, P2DistanceEvent, EarthSoI, EMMomentumDiff, MarsSoI, MoonSoI, SMMomentumDiff, days, initialEpoch, initialEpochTime, oe_E, oe_M)
+    return MMATEnv(EMDynamicsModel, SDynamicsModel, SEDynamicsModel, SMDynamicsModel, Earth, Mars, Moon, Sun, charValues, momentumPropagator, orbitDepartureEvent, propagator, P1DistanceEvent, P2DistanceEvent, EarthSoI, EMMomentumDiff, MarsSoI, MoonSoI, SMMomentumDiff, days, epochs, initialEpoch, initialEpochTime, oe_E, oe_M)
 end
 
 function computeDepartureArcs(env::MMATEnv, targeter, JC::Float64)
@@ -202,11 +204,10 @@ end
 
 function computeMMATs(env::MMATEnv, targeter::MMATArrivalPhaseTargeter, depArcs::Vector{MBD.CR3BPManifoldArc}, depCache::Vector{DepCache}, arrArc::MBD.CR3BPManifoldArc, arrCache::ArrCache, mf::MATLAB.MatFile)
     println("Computing MMAT transfers...")
-    for day::Float64 in env.days
+    for (idx::Int64, day::Float64) in pairs(env.days)
         e_dep::Float64 = 3600*24*day
-        depEpochTime::Float64 = env.initialEpochTime+e_dep
-        println("\tComputing transfers for $(SPICE.et2utc(depEpochTime, "C", 0))...")
-        theta_E_dep::Float64 = env.oe_E[6]+e_dep/env.charValues.SE.lstar
+        println("\tComputing transfers for $(env.epochs[idx])...")
+        theta_E_dep::Float64 = env.oe_E[6]+e_dep/env.charValues.SE.tstar
         count0::Int64, count1::Int64 = 0, 0
         fails::Int64 = 0
         for d::Int64 in 1:length(depArcs)
@@ -300,6 +301,8 @@ function run_MarsMMATCR3BP()
     SMTargeter = SpatialPerpJCTargeter(env.SMDynamicsModel)
     SMJC::Float64 = 3.0001857
     arrArc::MBD.CR3BPManifoldArc, arrCache::ArrCache = computeArrivalArc(env, SMTargeter, SMJC)
+
+    # eph = Ephemerides.EphemerisProvider(["SPICEKernels/de430.bsp", "SPICEKernels/de440.bsp", "SPICEKernels/mar097.bsp"])
 
     MMATTargeter = MMATArrivalPhaseTargeter(env.SDynamicsModel, sqrt(eps(Float64)))
     computeMMATs(env, MMATTargeter, depArcs, depCache, arrArc, arrCache, mf)

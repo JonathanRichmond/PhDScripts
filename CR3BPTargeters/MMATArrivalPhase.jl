@@ -3,7 +3,7 @@ Arrival phase targeter for CR3BP MMATs
 
 Author: Jonathan LeFevre Richmond
 C: 1/30/26
-U: 2/2/26
+U: 2/3/26
 """
 
 using MBD, LinearAlgebra
@@ -38,6 +38,7 @@ struct MMATEnv
     SMMomentumDiff::Float64
 
     days::Vector{Float64}
+    epochs::Vector{String}
     initialEpoch::String
     initialEpochTime::Float64
 
