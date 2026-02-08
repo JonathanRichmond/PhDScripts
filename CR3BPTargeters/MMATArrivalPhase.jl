@@ -3,12 +3,13 @@ Arrival phase targeter for CR3BP MMATs
 
 Author: Jonathan LeFevre Richmond
 C: 1/30/26
-U: 2/7/26
+U: 2/3/26
 """
 
-using MBD, FrameTransformations, LinearAlgebra
+using MBD, LinearAlgebra
 
-export MMATArrivalPhaseTargeter, MMATEnv
+export MMATEnv
+export MMATArrivalPhaseTargeter
 export centralDifference, correct, evaluateConstraints
 
 struct MMATEnv
@@ -38,7 +39,6 @@ struct MMATEnv
 
     days::Vector{Float64}
     epochs::Vector{String}
-    frame::FrameTransformations.FrameSystem
     initialEpoch::String
     initialEpochTime::Float64
 
@@ -108,11 +108,11 @@ Return corrected multiple shooter problem
 function correct(targeter::MMATArrivalPhaseTargeter, env::MMATEnv, X::Vector{Float64}, oe_bridge_peri::Vector{Float64}, q_arr_SoI::Vector{Float64})
     F::Vector{Float64} = -1.0 .* evaluateConstraints(targeter, env, X, oe_bridge_peri, q_arr_SoI)
     iter::Int64 = 1
-    while (LinearAlgebra.norm(F) >= 1E-5) && (iter <= 50)
+    while (LinearAlgebra.norm(F) >= 1E-5) && (iter <= 100)
         DF::Matrix{Float64} = centralDifference(targeter, env, X, oe_bridge_peri, q_arr_SoI)
         solver = LinearAlgebra.qr(DF, LinearAlgebra.ColumnNorm())
         dX::Vector{Float64} = solver\F
-        alpha::Float64 = 1.0#(LinearAlgebra.norm(F) > 5000) ? 0.1 : 1.0
+        alpha::Float64 = (LinearAlgebra.norm(F) > 5000) ? 0.1 : 1.0
         X += alpha.*dX
         F = -1.0 .* evaluateConstraints(targeter, env, X, oe_bridge_peri, q_arr_SoI)
         iter += 1
@@ -135,7 +135,7 @@ Return evaluated constraint vector
 """
 function evaluateConstraints(targeter::MMATArrivalPhaseTargeter, env::MMATEnv, X::Vector{Float64}, oe_bridge_peri::Vector{Float64}, q_arr_SoI::Vector{Float64})
     Q_bridge_int::Vector{Float64} = getCartesianState(targeter.dynamicsModel, append!(oe_bridge_peri[1:5], X[1]))
-    q_arr_SoI_SI::Vector{Float64} = rotatingToSunEclipJ2000(env.SMDynamicsModel, env.frame, env.initialEpochTime, [q_arr_SoI], [X[2]])[1]
+    q_arr_SoI_SI::Vector{Float64} = rotatingToSunEclipJ2000(env.SMDynamicsModel, env.initialEpoch, [q_arr_SoI], [X[2]])[1]
     @views Q_arr_SoI_SI = similar(q_arr_SoI_SI)
     Q_arr_SoI_SI[1:3] .= q_arr_SoI_SI[1:3].*env.charValues.SM.lstar
     Q_arr_SoI_SI[4:6] .= q_arr_SoI_SI[4:6].*env.charValues.SM.lstar./env.charValues.SM.tstar
