@@ -3,11 +3,10 @@ Script for computing CR3BP MMATs between Earth-Moon and Sun-Mars systems
 
 Author: Jonathan LeFevre Richmond
 C: 1/24/26
-U: 2/3/26
+U: 2/7/26
 """
-# module MMMATCR3BP
 
-using MBD, DifferentialEquations, Ephemerides, Logging, MATLAB, SPICE
+using MBD, DifferentialEquations, Ephemerides, FrameTransformations, Logging, MATLAB, SPICE
 
 global_logger(ConsoleLogger(stderr, Logging.Warn)) # Debug, Info, Warn, Error
 
@@ -26,6 +25,7 @@ end
 
 struct CharValues
     lstar::Float64
+    mstar::Float64
     tstar::Float64
 end
 
@@ -34,7 +34,36 @@ struct DepCache
     t_orbitDeparture::Float64
 end
 
-function setupEnvironment()::MMATEnv
+struct MMAT
+    branch::Int64
+    day::Float64
+    type::Int64
+
+    Deltav_1::Float64
+    depArc::MBD.CR3BPManifoldArc
+    depArcSEProp::MBD.CR3BPArc
+    oe_bridge_peri::Vector{Float64}
+    oe_dep_SoI::Vector{Float64}
+    transfer::Vector{Float64}
+    t_depConic::Float64
+end
+
+function buildFrame(eph::Ephemerides.EphemerisProvider, Sun::MBD.BodyData, Earth::MBD.BodyData, Moon::MBD.BodyData, Mars::MBD.BodyData)
+    frame = FrameTransformations.FrameSystem{2, Float64}()
+    add_axes_icrf!(frame)
+    add_axes_ecl2000!(frame)
+    add_point!(frame, :SSB, 0, 1)
+    add_point_ephemeris!(frame, eph, :Sun, Int64(Sun.spiceID))
+    add_point_ephemeris!(frame, eph, :B1, firstdigit(Earth.spiceID))
+    add_point_ephemeris!(frame, eph, :Earth, Int64(Earth.spiceID))
+    add_point_ephemeris!(frame, eph, :Moon, Int64(Moon.spiceID))
+    add_point_ephemeris!(frame, eph, :MarsB, firstdigit(Mars.spiceID))
+    add_point_ephemeris!(frame, eph, :Mars, Int64(Mars.spiceID))
+
+    return frame
+end
+
+function setupEnvironment(eph::Ephemerides.EphemerisProvider)::MMATEnv
     EMSystemData = MBD.CR3BPSystemData("Earth", "Moon")
     SESystemData = MBD.CR3BPSystemData("Sun", "Earth")
     SSystemData = MBD.KSystemData("Sun")
@@ -47,9 +76,9 @@ function setupEnvironment()::MMATEnv
     Earth::MBD.BodyData, Moon::MBD.BodyData = EMSystemData.primaryData
     Sun::MBD.BodyData, Mars::MBD.BodyData = SMSystemData.primaryData
 
-    charValues::NamedTuple = (EM = CharValues(getCharLength(EMSystemData), getCharTime(EMSystemData)),
-                              SE = CharValues(getCharLength(SESystemData), getCharTime(SESystemData)),
-                              SM = CharValues(getCharLength(SMSystemData), getCharTime(SMSystemData)))
+    charValues::NamedTuple = (EM = CharValues(getCharLength(EMSystemData), getCharMass(EMSystemData), getCharTime(EMSystemData)),
+                              SE = CharValues(getCharLength(SESystemData), getCharMass(SESystemData), getCharTime(SESystemData)),
+                              SM = CharValues(getCharLength(SMSystemData), getCharMass(SMSystemData), getCharTime(SMSystemData)))
     
     propagator = MBD.Propagator()
     momentumPropagator = MBD.Propagator(equationType = MBD.MOMENTUM)
@@ -65,17 +94,18 @@ function setupEnvironment()::MMATEnv
 
     initialEpoch::String = "Jan 1 2030"
     initialEpochTime::Float64 = SPICE.str2et(initialEpoch)
-    # days::Vector{Float64} = [0.0]
-    days::Vector{Float64} = collect(0.0:36.0:360.0)
+    days::Vector{Float64} = collect(0.0:1.0:364.0)
     epochTimes::Vector{Float64} = initialEpochTime .+ days .* 3600 .* 24
     epochs::Vector{String} = [SPICE.et2utc(et, "C", 0) for et in epochTimes]
 
-    q_E_0::Vector{Float64} = getEphemerides(initialEpoch, [0.0], "Earth", "Sun", "ECLIPJ2000")[1][1]
-    q_M_0::Vector{Float64} = getEphemerides(initialEpoch, [0.0], "Mars", "Sun", "ECLIPJ2000")[1][1]
-    oe_E::Vector{Float64} = SPICE.oscltx(q_E_0, initialEpochTime, Sun.gravParam)
-    oe_M::Vector{Float64} = SPICE.oscltx(q_M_0, initialEpochTime, Sun.gravParam)
+    frame::FrameTransformations.FrameSystem = buildFrame(eph, Sun, Earth, Moon, Mars)
 
-    return MMATEnv(EMDynamicsModel, SDynamicsModel, SEDynamicsModel, SMDynamicsModel, Earth, Mars, Moon, Sun, charValues, momentumPropagator, orbitDepartureEvent, propagator, P1DistanceEvent, P2DistanceEvent, EarthSoI, EMMomentumDiff, MarsSoI, MoonSoI, SMMomentumDiff, days, epochs, initialEpoch, initialEpochTime, oe_E, oe_M)
+    Q_E_0::Vector{Float64} = FrameTransformations.vector6(frame, Int64(Sun.spiceID), Int64(Earth.spiceID), 17, initialEpochTime)
+    Q_M_0::Vector{Float64} = FrameTransformations.vector6(frame, Int64(Sun.spiceID), Int64(Mars.spiceID), 17, initialEpochTime)
+    oe_E::Vector{Float64} = getOrbitalElements(SDynamicsModel, Q_E_0)
+    oe_M::Vector{Float64} = getOrbitalElements(SDynamicsModel, Q_M_0)
+
+    return MMATEnv(EMDynamicsModel, SDynamicsModel, SEDynamicsModel, SMDynamicsModel, Earth, Mars, Moon, Sun, charValues, momentumPropagator, orbitDepartureEvent, propagator, P1DistanceEvent, P2DistanceEvent, EarthSoI, EMMomentumDiff, MarsSoI, MoonSoI, SMMomentumDiff, days, epochs, frame, initialEpoch, initialEpochTime, oe_E, oe_M)
 end
 
 function computeDepartureArcs(env::MMATEnv, targeter, JC::Float64)
@@ -93,19 +123,24 @@ function computeDepartureArcs(env::MMATEnv, targeter, JC::Float64)
     negUnstableManifold::MBD.CR3BPManifold = getManifoldByArclength(orbit, "Unstable", "Negative", 25/lstar, 100)
     posUnstableManifold.TOF, negUnstableManifold.TOF = 40.0, 40.0
     unstableManifoldArcs::Vector{MBD.CR3BPManifoldArc} = vcat(stopCrashes(posUnstableManifold), stopCrashes(negUnstableManifold))
-    arcs::Vector{MBD.CR3BPManifoldArc} = []
-    cache::Vector{DepCache} = []
-    for manifoldArc::MBD.CR3BPManifoldArc in unstableManifoldArcs
+    nThreads::Int64 = Threads.maxthreadid()
+    arcs_tls::Vector{Vector{MBD.CR3BPManifoldArc}} = [Vector{MBD.CR3BPManifoldArc}(undef, 0) for _ in 1:nThreads]
+    cache_tls::Vector{Vector{DepCache}} = [Vector{DepCache}(undef, 0) for _ in 1:nThreads]
+    Threads.@threads for a::Int64 in eachindex(unstableManifoldArcs)
+        id::Int64 = Threads.threadid()
+        manifoldArc::MBD.CR3BPManifoldArc = unstableManifoldArcs[a]
         arc::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.P2DistanceEvent, real(manifoldArc.initialCondition), [0, manifoldArc.TOF], dynamicsModel, [env.MoonSoI])
         (abs(getTimeByIndex(arc, -1)) == abs(manifoldArc.TOF)) && continue
-        manifoldArc.TOF = getTimeByIndex(arc, -1)
-        push!(arcs, manifoldArc)
-        orbitArc::MBD.CR3BPArc = propagate(env.propagator, orbit.initialCondition, [0, manifoldArc.orbitTime*orbit.period], dynamicsModel)
+        localArc = MBD.CR3BPManifoldArc(manifoldArc.periodicOrbit, manifoldArc.orbitTime, manifoldArc.d, manifoldArc.initialCondition, getTimeByIndex(arc, -1))
+        orbitArc::MBD.CR3BPArc = propagate(env.propagator, orbit.initialCondition, [0, localArc.orbitTime*orbit.period], dynamicsModel)
         q_dep::Vector{Float64} = getStateByIndex(orbitArc, -1)
-        orbitDepartureArc::MBD.CR3BPArc = propagateWithEvent(env.momentumPropagator, env.orbitDepartureEvent, appendExtraInitialConditions(dynamicsModel, real(manifoldArc.initialCondition), MBD.MOMENTUM), [0, manifoldArc.TOF], dynamicsModel, [env.momentumPropagator, dynamicsModel, q_dep, env.EMMomentumDiff])
+        orbitDepartureArc::MBD.CR3BPArc = propagateWithEvent(env.momentumPropagator, env.orbitDepartureEvent, appendExtraInitialConditions(dynamicsModel, real(localArc.initialCondition), MBD.MOMENTUM), [0, localArc.TOF], dynamicsModel, [env.momentumPropagator, dynamicsModel, q_dep, env.EMMomentumDiff])
         t_orbitDeparture::Float64 = getTimeByIndex(orbitDepartureArc, -1)*tstar
-        push!(cache, DepCache(arc, t_orbitDeparture))
+        push!(arcs_tls[id], localArc)
+        push!(cache_tls[id], DepCache(arc, t_orbitDeparture))
     end
+    arcs::Vector{MBD.CR3BPManifoldArc} = reduce(vcat, arcs_tls)
+    cache::Vector{DepCache} = reduce(vcat, cache_tls)
     println("Available departure arcs: $(length(arcs))\n")
 
     return arcs, cache
@@ -122,26 +157,31 @@ function computeArrivalArc(env::MMATEnv, targeter, JC::Float64)
     orbit = MBD.CR3BPPeriodicOrbit(dynamicsModel, solution.nodes[1].state.data[1:6], getPeriod(targeter, solution), getMonodromy(targeter, solution))
     println("Converged Sun-Mars orbit:\n\tIC:\t$(orbit.initialCondition)\n\tP:\t$(orbit.period)\n\tJC:\t$(getJacobiConstant(orbit))\n")
 
-    posStableManifold::MBD.CR3BPManifold = getManifoldByArclength(orbit, "Stable", "Positive", 1000/lstar, 50)
-    negStableManifold::MBD.CR3BPManifold = getManifoldByArclength(orbit, "Stable", "Negative", 1000/lstar, 50)
+    posStableManifold::MBD.CR3BPManifold = getManifoldByArclength(orbit, "Stable", "Positive", 1000/lstar, 100)
+    negStableManifold::MBD.CR3BPManifold = getManifoldByArclength(orbit, "Stable", "Negative", 1000/lstar, 100)
     posStableManifold.TOF, negStableManifold.TOF = -40.0, -40.0
     stableManifoldArcs::Vector{MBD.CR3BPManifoldArc} = vcat(stopCrashes(posStableManifold), stopCrashes(negStableManifold))
-    arcs::Vector{MBD.CR3BPManifoldArc} = []
-    periapses::Vector{Float64} = []
-    for manifoldArc::MBD.CR3BPManifoldArc in stableManifoldArcs
+    nThreads::Int64 = Threads.maxthreadid()
+    arcs_tls::Vector{Vector{MBD.CR3BPManifoldArc}} = [Vector{MBD.CR3BPManifoldArc}(undef, 0) for _ in 1:nThreads]
+    periapses_tls::Vector{Vector{Float64}} = [Vector{Float64}(undef, 0) for _ in 1:nThreads]
+    Threads.@threads for a::Int64 in eachindex(stableManifoldArcs)
+        id::Int64 = Threads.threadid()
+        manifoldArc::MBD.CR3BPManifoldArc = stableManifoldArcs[a]
         arc::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.P2DistanceEvent, real(manifoldArc.initialCondition), [0, manifoldArc.TOF], dynamicsModel, [env.MarsSoI])
         (abs(getTimeByIndex(arc, -1)) == abs(manifoldArc.TOF)) && continue
-        manifoldArc.TOF = getTimeByIndex(arc, -1)
+        localArc = MBD.CR3BPManifoldArc(manifoldArc.periodicOrbit, manifoldArc.orbitTime, manifoldArc.d, manifoldArc.initialCondition, getTimeByIndex(arc, -1))
         q_SoI_SI::Vector{Float64} = rotatingToPrimaryInertial(dynamicsModel, 1, [getStateByIndex(arc, -1)], [0.0])[1]
         @views Q_SoI_SI = similar(q_SoI_SI)
         Q_SoI_SI[1:3] .= q_SoI_SI[1:3].*lstar
         Q_SoI_SI[4:6] .= q_SoI_SI[4:6].*lstar./tstar
         oe::Vector{Float64} = getOrbitalElements(env.SDynamicsModel, Q_SoI_SI)
         if oe[2] < 1.0
-            push!(arcs, manifoldArc)
-            push!(periapses, oe[1]*(1-oe[2]))
+            push!(arcs_tls[id], localArc)
+            push!(periapses_tls[id], oe[1]*(1-oe[2]))
         end
     end
+    arcs::Vector{MBD.CR3BPManifoldArc} = reduce(vcat, arcs_tls)
+    periapses::Vector{Float64} = reduce(vcat, periapses_tls)
     println("Available arrival arcs: $(length(arcs))")
 
     minPeriapsisIndex::Int64 = argmin(periapses)
@@ -154,7 +194,7 @@ function computeArrivalArc(env::MMATEnv, targeter, JC::Float64)
     t_orbitArrival::Float64 = -1*getTimeByIndex(orbitArrivalArc, -1)*tstar
     arrivalArcProp::MBD.CR3BPArc = propagate(env.propagator, real(arrivalArc.initialCondition), [0, arrivalArc.TOF], dynamicsModel)
     t_arrival::Float64 = -1*arrivalArc.TOF*tstar
-    q_arr_SoI_SI_guess::Vector{Float64} = rotatingToSunEclipJ2000(dynamicsModel, env.initialEpoch, [getStateByIndex(arrivalArcProp, -1)], [0.0])[1]
+    q_arr_SoI_SI_guess::Vector{Float64} = rotatingToSunEclipJ2000(dynamicsModel, env.frame, env.initialEpochTime, [getStateByIndex(arrivalArcProp, -1)], [0.0])[1]
     @views Q_arr_SoI_SI_guess = similar(q_arr_SoI_SI_guess)
     Q_arr_SoI_SI_guess[1:3] .= q_arr_SoI_SI_guess[1:3].*lstar
     Q_arr_SoI_SI_guess[4:6] .= q_arr_SoI_SI_guess[4:6].*lstar./tstar
@@ -166,7 +206,7 @@ function computeArrivalArc(env::MMATEnv, targeter, JC::Float64)
     return arrivalArc, ArrCache(arrivalArcProp, oe_arr_SoI_guess, r_arr_l, r_arr_u, t_arrival, t_orbitArrival)
 end
 
-function findIntersection(targeter::MMATArrivalPhaseTargeter, env::MMATEnv, arrCache::ArrCache, oe_dep_SoI::Vector{Float64}, oe_bridge_peri::Vector{Float64}, q_arr_SoI::Vector{Float64}, r_int::Float64, theta_bridge_int_guess::Float64, u_arr_guess::Float64, n::Int64, o::Int64)
+function findIntersection(targeter::MMATArrivalPhaseTargeter, env::MMATEnv, arrCache::ArrCache, oe_bridge_peri::Vector{Float64}, q_arr_SoI::Vector{Float64}, r_int::Float64, theta_bridge_int_guess::Float64, u_arr_guess::Float64, n::Int64, o::Int64)
     theta_arr_int_guess::Float64 = 2*o*pi+(-1)^o*acos((arrCache.oe_arr_SoI_guess[1]*(1-arrCache.oe_arr_SoI_guess[2]^2)/r_int-1)/arrCache.oe_arr_SoI_guess[2])
     omega_arr_guess::Float64 = (u_arr_guess-(theta_arr_int_guess+n*pi) > 0) ? u_arr_guess-(theta_arr_int_guess+n*pi) : 2*pi+u_arr_guess-(theta_arr_int_guess+n*pi)
     sigma_guess::Float64 = atan(cos(env.oe_M[3])*tan(env.oe_M[4]))+omega_arr_guess+arrCache.oe_arr_SoI_guess[6]
@@ -175,7 +215,7 @@ function findIntersection(targeter::MMATArrivalPhaseTargeter, env::MMATEnv, arrC
     X::Vector{Float64} = correct(targeter, env, X_guess, oe_bridge_peri, q_arr_SoI)
     Q_bridge_int_SI::Vector{Float64} = getCartesianState(env.SDynamicsModel, append!(oe_bridge_peri[1:5], X[1]))
     t_bridgeConic::Float64 = solveKeplersEquation(env.SDynamicsModel, append!(oe_bridge_peri[1:5], X[1]))
-    q_arr_SoI_SI::Vector{Float64} = rotatingToSunEclipJ2000(env.SMDynamicsModel, env.initialEpoch, [q_arr_SoI], [X[2]])[1]
+    q_arr_SoI_SI::Vector{Float64} = rotatingToSunEclipJ2000(env.SMDynamicsModel, env.frame, env.initialEpochTime, [q_arr_SoI], [X[2]])[1]
     @views Q_arr_SoI_SI = similar(q_arr_SoI_SI)
     Q_arr_SoI_SI[1:3] .= q_arr_SoI_SI[1:3].*env.charValues.SM.lstar
     Q_arr_SoI_SI[4:6] .= q_arr_SoI_SI[4:6].*env.charValues.SM.lstar./env.charValues.SM.tstar
@@ -189,9 +229,9 @@ function findIntersection(targeter::MMATArrivalPhaseTargeter, env::MMATEnv, arrC
     return [t_bridgeConic, Deltav_2, oe_arr_int..., t_arrConic, X[2]]
 end
 
-function computeMMAT(targeter::MMATArrivalPhaseTargeter, env::MMATEnv, depCache::DepCache, arrCache::ArrCache, oe_dep_SoI::Vector{Float64}, oe_bridge_peri::Vector{Float64}, r_int::Float64, theta_bridge_int_guess::Float64, u_arr_guess::Float64, n::Int64, o::Int64, t_depConic::Float64, t_departure::Float64)
+function computeMMAT(targeter::MMATArrivalPhaseTargeter, env::MMATEnv, depCache::DepCache, arrCache::ArrCache, oe_bridge_peri::Vector{Float64}, r_int::Float64, theta_bridge_int_guess::Float64, u_arr_guess::Float64, n::Int64, o::Int64, t_depConic::Float64, t_departure::Float64)
     (n == 1) && (theta_bridge_int_guess += pi)
-    intersect::Vector{Float64} = findIntersection(targeter, env, arrCache, oe_dep_SoI, oe_bridge_peri, getStateByIndex(arrCache.arc, -1), r_int, theta_bridge_int_guess, u_arr_guess, n, o)
+    intersect::Vector{Float64} = findIntersection(targeter, env, arrCache, oe_bridge_peri, getStateByIndex(arrCache.arc, -1), r_int, theta_bridge_int_guess, u_arr_guess, n, o)
     theta_M_arr::Float64 = intersect[10]+arrCache.t_arrival/env.charValues.SM.tstar
     theta_M_dep::Float64 = intersect[10]-(intersect[9]+intersect[1]+t_depConic+t_departure)/env.charValues.SM.tstar
     while theta_M_dep < 0.0
@@ -208,12 +248,14 @@ function computeMMATs(env::MMATEnv, targeter::MMATArrivalPhaseTargeter, depArcs:
         e_dep::Float64 = 3600*24*day
         println("\tComputing transfers for $(env.epochs[idx])...")
         theta_E_dep::Float64 = env.oe_E[6]+e_dep/env.charValues.SE.tstar
-        count0::Int64, count1::Int64 = 0, 0
+        nThreads::Int64 = Threads.maxthreadid()
+        results_tls::Vector{Vector{MMAT}} = [Vector{MMAT}() for _ in 1:nThreads]
         fails::Int64 = 0
-        for d::Int64 in 1:length(depArcs)
+        Threads.@threads for d::Int64 in eachindex(depArcs)
+            id::Int64 = Threads.threadid()
             depArc::MBD.CR3BPManifoldArc = depArcs[d]
             cache::DepCache = depCache[d]
-            q_dep_blend_EI_EM::Vector{Float64} = rotatingToPrimaryEclipJ2000(env.EMDynamicsModel, env.initialEpoch, [getStateByIndex(cache.arc, -1)], [getTimeByIndex(cache.arc, -1)+e_dep/env.charValues.EM.tstar])[1]
+            q_dep_blend_EI_EM::Vector{Float64} = rotatingToPrimaryEclipJ2000(env.EMDynamicsModel, env.frame, env.initialEpochTime, [getStateByIndex(cache.arc, -1)], [getTimeByIndex(cache.arc, -1)+e_dep/env.charValues.EM.tstar])[1]
             @views Q_dep_blend_EI = similar(q_dep_blend_EI_EM)
             Q_dep_blend_EI[1:3] .= q_dep_blend_EI_EM[1:3].*env.charValues.EM.lstar
             Q_dep_blend_EI[4:6] .= q_dep_blend_EI_EM[4:6].*env.charValues.EM.lstar./env.charValues.EM.tstar
@@ -221,14 +263,14 @@ function computeMMATs(env::MMATEnv, targeter::MMATArrivalPhaseTargeter, depArcs:
             q_dep_blend_EI_SE[1:3] .= Q_dep_blend_EI[1:3]./env.charValues.SE.lstar
             q_dep_blend_EI_SE[4:6] .= Q_dep_blend_EI[4:6].*env.charValues.SE.tstar./env.charValues.SE.lstar
             e_blend_SE::Float64 = (getTimeByIndex(cache.arc, -1)*env.charValues.EM.tstar+e_dep)/env.charValues.SE.tstar
-            q_dep_blend_SE::Vector{Float64} = secondaryEclipJ2000ToRotating(env.SEDynamicsModel, env.initialEpoch, [q_dep_blend_EI_SE], [e_blend_SE])[1]
+            q_dep_blend_SE::Vector{Float64} = secondaryEclipJ2000ToRotating(env.SEDynamicsModel, env.frame, env.initialEpochTime, [q_dep_blend_EI_SE], [e_blend_SE])[1]
             testProp::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.P2DistanceEvent, q_dep_blend_SE, [0, 4.0*pi], env.SEDynamicsModel, [env.Earth.bodyRadius/env.charValues.SE.lstar])
             testTime::Float64 = getTimeByIndex(testProp, -1)
             depArcSEProp::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.P2DistanceEvent, q_dep_blend_SE, [0, testTime], env.SEDynamicsModel, [env.EarthSoI])
             (abs(getTimeByIndex(depArcSEProp, -1)) == abs(testTime)) && continue
             t_departure::Float64 = depArc.TOF*env.charValues.EM.tstar+getTimeByIndex(depArcSEProp, -1)*env.charValues.SE.tstar
 
-            q_dep_SoI_SI::Vector{Float64} = rotatingToSunEclipJ2000(env.SEDynamicsModel, env.initialEpoch, [getStateByIndex(depArcSEProp, -1)], [(e_dep+t_departure)/env.charValues.SE.tstar])[1]
+            q_dep_SoI_SI::Vector{Float64} = rotatingToSunEclipJ2000(env.SEDynamicsModel, env.frame, env.initialEpochTime, [getStateByIndex(depArcSEProp, -1)], [(e_dep+t_departure)/env.charValues.SE.tstar])[1]
             @views Q_dep_SoI_SI = similar(q_dep_SoI_SI)
             Q_dep_SoI_SI[1:3] .= q_dep_SoI_SI[1:3].*env.charValues.SE.lstar
             Q_dep_SoI_SI[4:6] .= q_dep_SoI_SI[4:6].*env.charValues.SE.lstar./env.charValues.SE.tstar
@@ -262,37 +304,58 @@ function computeMMATs(env::MMATEnv, targeter::MMATArrivalPhaseTargeter, depArcs:
 
             if (arrCache.r_arr_l < r_int_0 < arrCache.r_arr_u)
                 try
-                    transfer_a::Vector{Float64} = computeMMAT(targeter, env, cache, arrCache, oe_dep_SoI, oe_bridge_peri, r_int_0, theta_bridge_int_guess, u_arr_guess, 0, 0, t_depConic, t_departure)
-                    count0 += 1
-                    exportCR3BPMMAT(env, e_dep, transfer_a[1:10], theta_E_dep, transfer_a[11], transfer_a[12], depArc, depArcSEProp, oe_dep_SoI, t_depConic, oe_bridge_peri, arrArc, Deltav_1, transfer_a[13], mf, Symbol("Transfer_Day", Int(day), "_Type0_", count0, "a"))
+                    transfer_a::Vector{Float64} = computeMMAT(targeter, env, cache, arrCache, oe_bridge_peri, r_int_0, theta_bridge_int_guess, u_arr_guess, 0, 0, t_depConic, t_departure)
+                    push!(results_tls[id], MMAT(0, day, 0, Deltav_1, depArc, depArcSEProp, oe_bridge_peri, oe_dep_SoI, transfer_a, t_depConic))
                 catch
-                    fails += 2
+                    fails += 1
+                end
+                try
+                    transfer_b::Vector{Float64} = computeMMAT(targeter, env, cache, arrCache, oe_bridge_peri, r_int_0, theta_bridge_int_guess, u_arr_guess, 0, 1, t_depConic, t_departure)
+                    push!(results_tls[id], MMAT(1, day, 0, Deltav_1, depArc, depArcSEProp, oe_bridge_peri, oe_dep_SoI, transfer_b, t_depConic))
+                catch
+                    fails += 1
                     continue
                 end
-                transfer_b::Vector{Float64} = computeMMAT(targeter, env, cache, arrCache, oe_dep_SoI, oe_bridge_peri, r_int_0, theta_bridge_int_guess, u_arr_guess, 0, 1, t_depConic, t_departure)
-                exportCR3BPMMAT(env, e_dep, transfer_b[1:10], theta_E_dep, transfer_b[11], transfer_b[12], depArc, depArcSEProp, oe_dep_SoI, t_depConic, oe_bridge_peri, arrArc, Deltav_1, transfer_b[13], mf, Symbol("Transfer_Day", Int(day), "_Type0_", count0, "b"))
             elseif (arrCache.r_arr_l < r_int_1 < arrCache.r_arr_u)
                 try
-                    transfer_a = computeMMAT(targeter, env, cache, arrCache, oe_dep_SoI, oe_bridge_peri, r_int_1, theta_bridge_int_guess, u_arr_guess, 1, 0, t_depConic, t_departure)
-                    count1 += 1
-                    exportCR3BPMMAT(env, e_dep, transfer_a[1:10], theta_E_dep, transfer_a[11], transfer_a[12], depArc, depArcSEProp, oe_dep_SoI, t_depConic, oe_bridge_peri, arrArc, Deltav_1, transfer_a[13], mf, Symbol("Transfer_Day", Int(day), "_Type1_", count1, "a"))
+                    transfer_a = computeMMAT(targeter, env, cache, arrCache, oe_bridge_peri, r_int_1, theta_bridge_int_guess+pi, u_arr_guess, 1, 0, t_depConic, t_departure)
+                    push!(results_tls[id], MMAT(0, day, 1, Deltav_1, depArc, depArcSEProp, oe_bridge_peri, oe_dep_SoI, transfer_a, t_depConic))
                 catch
-                    fails += 2
+                    fails += 1
+                end
+                try
+                    transfer_b = computeMMAT(targeter, env, cache, arrCache, oe_bridge_peri, r_int_1, theta_bridge_int_guess+pi, u_arr_guess, 1, 1, t_depConic, t_departure)
+                    push!(results_tls[id], MMAT(1, day, 1, Deltav_1, depArc, depArcSEProp, oe_bridge_peri, oe_dep_SoI, transfer_b, t_depConic))
+                catch
+                    fails += 1
                     continue
                 end
-                transfer_b = computeMMAT(targeter, env, cache, arrCache, oe_dep_SoI, oe_bridge_peri, r_int_1, theta_bridge_int_guess, u_arr_guess, 1, 1, t_depConic, t_departure)
-                exportCR3BPMMAT(env, e_dep, transfer_b[1:10], theta_E_dep, transfer_b[11], transfer_b[12], depArc, depArcSEProp, oe_dep_SoI, t_depConic, oe_bridge_peri, arrArc, Deltav_1, transfer_b[13], mf, Symbol("Transfer_Day", Int(day), "_Type1_", count1, "b"))
             end
         end
-        println("\t\tTransfers found: $(count0*2+count1*2) ($fails failed)")
+        results::Vector{MMAT} = reduce(vcat, results_tls)
+        empty!.(results_tls)
+        count0::Int64 = count1::Int64 = 0
+        for r::MMAT in results
+            if r.type == 0
+                count0 += 1
+                label = Symbol("transfer_day", Int(day), "_type0_", count0, r.branch == 0 ? "a" : "b")
+            else
+                count1 += 1
+                label = Symbol("transfer_day", Int(day), "_type1_", count1, r.branch == 0 ? "a" : "b")
+            end
+            exportCR3BPMMAT(env, e_dep, r.transfer[1:10], theta_E_dep, r.transfer[11], r.transfer[12], r.depArc, r.depArcSEProp, r.oe_dep_SoI, r.t_depConic, r.oe_bridge_peri, arrArc, r.Deltav_1, r.transfer[13], mf, label)
+        end
+        println("\t\tTransfers found: $(count0+count1) ($fails failed)")
+        empty!(results)
     end
 end
 
 function run_MarsMMATCR3BP()
     mf = MATLAB.MatFile("Output/MarsMMATCR3BP.mat", "w")
-    SPICE.furnsh("SPICEKernels/naif0012.tls", "SPICEKernels/de430.bsp", "SPICEKernels/de440.bsp", "SPICEKernels/mar097.bsp")
+    SPICE.furnsh("SPICEKernels/naif0012.tls")
+    eph = Ephemerides.EphemerisProvider(["SPICEKernels/de430.bsp", "SPICEKernels/de440.bsp", "SPICEKernels/mar097.bsp"])
 
-    env = setupEnvironment()
+    env::MMATEnv = setupEnvironment(eph)
 
     EMTargeter = SpatialPerpJCTargeter(env.EMDynamicsModel)
     EMJC::Float64 = 3.03
@@ -302,13 +365,9 @@ function run_MarsMMATCR3BP()
     SMJC::Float64 = 3.0001857
     arrArc::MBD.CR3BPManifoldArc, arrCache::ArrCache = computeArrivalArc(env, SMTargeter, SMJC)
 
-    # eph = Ephemerides.EphemerisProvider(["SPICEKernels/de430.bsp", "SPICEKernels/de440.bsp", "SPICEKernels/mar097.bsp"])
-
     MMATTargeter = MMATArrivalPhaseTargeter(env.SDynamicsModel, sqrt(eps(Float64)))
     computeMMATs(env, MMATTargeter, depArcs, depCache, arrArc, arrCache, mf)
 
     MATLAB.close(mf)
     SPICE.kclear()
 end
-
-# end
