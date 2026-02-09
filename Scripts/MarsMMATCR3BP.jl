@@ -3,7 +3,7 @@ Script for computing CR3BP MMATs between Earth-Moon and Sun-Mars systems
 
 Author: Jonathan LeFevre Richmond
 C: 1/24/26
-U: 2/7/26
+U: 2/9/26
 """
 
 using MBD, DifferentialEquations, Ephemerides, FrameTransformations, Logging, MATLAB, SPICE
@@ -351,11 +351,12 @@ function computeMMATs(env::MMATEnv, targeter::MMATArrivalPhaseTargeter, depArcs:
 end
 
 function run_MarsMMATCR3BP()
-    mf = MATLAB.MatFile("Output/MarsMMATCR3BP.mat", "w")
-    SPICE.furnsh("SPICEKernels/naif0012.tls")
+    mf = MATLAB.MatFile("Output/MMAT/MarsMMATCR3BP.mat", "w")
     eph = Ephemerides.EphemerisProvider(["SPICEKernels/de430.bsp", "SPICEKernels/de440.bsp", "SPICEKernels/mar097.bsp"])
-
+    
+    SPICE.furnsh("SPICEKernels/naif0012.tls")
     env::MMATEnv = setupEnvironment(eph)
+    SPICE.kclear()
 
     EMTargeter = SpatialPerpJCTargeter(env.EMDynamicsModel)
     EMJC::Float64 = 3.03
@@ -369,5 +370,4 @@ function run_MarsMMATCR3BP()
     computeMMATs(env, MMATTargeter, depArcs, depCache, arrArc, arrCache, mf)
 
     MATLAB.close(mf)
-    SPICE.kclear()
 end
