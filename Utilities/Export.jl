@@ -3,7 +3,7 @@ Export utility functions
 
 Author: Jonathan LeFevre Richmond
 C: 2/19/25
-U: 2/2/26
+U: 2/9/26
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, MATLAB
@@ -1042,7 +1042,7 @@ Export CR3BP MMAT data to MAT file
 - `file::MatFile`: MAT file
 - `name::Symbol`: Export object name
 """
-function exportCR3BPMMAT(env::MMATEnv, t_0::Float64, intersect::Vector{Float64}, theta_dep_0::Float64, theta_arr_f::Float64, theta_arr_0::Float64, departureManifoldArc::MBD.CR3BPManifoldArc, intermediateManifoldArc::MBD.CR3BPArc, oe_dep_SoI::Vector{Float64}, t_depConic::Float64, oe_bridge_peri::Vector{Float64}, arrivalManifoldArc::MBD.CR3BPManifoldArc, Deltav_1::Float64, TOF::Float64, file::MATLAB.MatFile, name::Symbol)
+function exportCR3BPMMAT(env, t_0::Float64, intersect::Vector{Float64}, theta_dep_0::Float64, theta_arr_f::Float64, theta_arr_0::Float64, departureManifoldArc::MBD.CR3BPManifoldArc, intermediateManifoldArc::MBD.CR3BPArc, oe_dep_SoI::Vector{Float64}, t_depConic::Float64, oe_bridge_peri::Vector{Float64}, arrivalManifoldArc::MBD.CR3BPManifoldArc, Deltav_1::Float64, TOF::Float64, file::MATLAB.MatFile, name::Symbol)
     departureOrbitArc::MBD.CR3BPArc = propagate(env.propagator, departureManifoldArc.periodicOrbit.initialCondition, [0, departureManifoldArc.periodicOrbit.period], departureManifoldArc.periodicOrbit.dynamicsModel)
     departureOrbitnStates::Int64 = getStateCount(departureOrbitArc)
     departureOrbitx::Vector{Float64} = zeros(Float64, departureOrbitnStates)

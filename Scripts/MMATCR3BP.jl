@@ -3,7 +3,7 @@ Script for computing CR3BP MMATs between Earth-Moon and Sun-planet systems
 
 Author: Jonathan LeFevre Richmond
 C: 1/24/26
-U: 2/9/26
+U: 2/10/26
 """
 
 module MMATCR3BP
@@ -17,7 +17,9 @@ include("../CR3BPTargeters/SpatialPerpJC.jl")
 include("../Utilities/Export.jl")
 
 # (SoI, momentum diff)
-const sysParams = Dict{String, Tuple{Float64, Float64}}("Mars" => (0.05375, 1E-5))
+const sysParams = Dict{String, Tuple{Float64, Float64}}("Venus" => (0.1107, 1E-5),
+                                                        "Earth" => (0.09877, 1E-5),
+                                                        "Mars" => (0.05375, 1E-5))
 const targeterMap = Dict{}("L1Halo" => SpatialPerpJCTargeter)
 
 struct ArrCache
@@ -93,7 +95,7 @@ function setupEnvironment(eph::Ephemerides.EphemerisProvider, arrBody::String)::
     P2DistanceEvent = DifferentialEquations.ContinuousCallback(p2CR3BPDistanceCondition, terminateAffect!)
 
     MoonSoI::Float64 = charValues.SE.lstar*(Moon.mass/Sun.mass)^(2/5)/charValues.EM.lstar
-    EarthSoI::Float64 = 0.09877
+    EarthSoI::Float64 = sysParams["Earth"][1]
     arrSoI::Float64 = sysParams[arrBody][1]
     EMMomentumDiff::Float64 = 1E-3
     SArrMomentumDiff::Float64 = sysParams[arrBody][2]
