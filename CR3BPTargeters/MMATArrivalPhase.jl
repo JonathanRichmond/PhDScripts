@@ -3,7 +3,7 @@ Arrival phase targeter for CR3BP MMATs
 
 Author: Jonathan LeFevre Richmond
 C: 1/30/26
-U: 2/7/26
+U: 2/9/26
 """
 
 using MBD, FrameTransformations, LinearAlgebra
@@ -15,10 +15,10 @@ struct MMATEnv
     EMDynamicsModel::MBD.CR3BPDynamicsModel
     SDynamicsModel::MBD.KDynamicsModel
     SEDynamicsModel::MBD.CR3BPDynamicsModel
-    SMDynamicsModel::MBD.CR3BPDynamicsModel
+    SArrDynamicsModel::MBD.CR3BPDynamicsModel
 
     Earth::MBD.BodyData
-    Mars::MBD.BodyData
+    arrBody::MBD.BodyData
     Moon::MBD.BodyData
     Sun::MBD.BodyData
 
@@ -32,9 +32,9 @@ struct MMATEnv
 
     EarthSoI::Float64
     EMMomentumDiff::Float64
-    MarsSoI::Float64
+    arrSoI::Float64
     MoonSoI::Float64
-    SMMomentumDiff::Float64
+    SArrMomentumDiff::Float64
 
     days::Vector{Float64}
     epochs::Vector{String}
@@ -43,7 +43,7 @@ struct MMATEnv
     initialEpochTime::Float64
 
     oe_E::Vector{Float64}
-    oe_M::Vector{Float64}
+    oe_arrBody::Vector{Float64}
 end
 
 """
@@ -135,10 +135,10 @@ Return evaluated constraint vector
 """
 function evaluateConstraints(targeter::MMATArrivalPhaseTargeter, env::MMATEnv, X::Vector{Float64}, oe_bridge_peri::Vector{Float64}, q_arr_SoI::Vector{Float64})
     Q_bridge_int::Vector{Float64} = getCartesianState(targeter.dynamicsModel, append!(oe_bridge_peri[1:5], X[1]))
-    q_arr_SoI_SI::Vector{Float64} = rotatingToSunEclipJ2000(env.SMDynamicsModel, env.frame, env.initialEpochTime, [q_arr_SoI], [X[2]])[1]
+    q_arr_SoI_SI::Vector{Float64} = rotatingToSunEclipJ2000(env.SArrDynamicsModel, env.frame, env.initialEpochTime, [q_arr_SoI], [X[2]])[1]
     @views Q_arr_SoI_SI = similar(q_arr_SoI_SI)
-    Q_arr_SoI_SI[1:3] .= q_arr_SoI_SI[1:3].*env.charValues.SM.lstar
-    Q_arr_SoI_SI[4:6] .= q_arr_SoI_SI[4:6].*env.charValues.SM.lstar./env.charValues.SM.tstar
+    Q_arr_SoI_SI[1:3] .= q_arr_SoI_SI[1:3].*env.charValues.SArr.lstar
+    Q_arr_SoI_SI[4:6] .= q_arr_SoI_SI[4:6].*env.charValues.SArr.lstar./env.charValues.SArr.tstar
     oe_arr_SoI::Vector{Float64} = getOrbitalElements(targeter.dynamicsModel, Q_arr_SoI_SI)
     oe_arr_int::Vector{Float64} = append!(oe_arr_SoI[1:5], X[3])
     Q_arr_int::Vector{Float64} = getCartesianState(targeter.dynamicsModel, oe_arr_int)
