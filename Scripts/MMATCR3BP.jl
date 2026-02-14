@@ -3,7 +3,7 @@ Script for computing CR3BP MMATs between Earth-Moon and Sun-planet systems
 
 Author: Jonathan LeFevre Richmond
 C: 1/24/26
-U: 2/10/26
+U: 2/11/26
 """
 
 module MMATCR3BP
@@ -217,7 +217,7 @@ end
 function findIntersection(targeter::MMATArrivalPhaseTargeter, env::MMATEnv, arrCache::ArrCache, oe_bridge_peri::Vector{Float64}, q_arr_SoI::Vector{Float64}, r_int::Float64, theta_bridge_int_guess::Float64, u_arr_guess::Float64, n::Int64, o::Int64)
     theta_arr_int_guess::Float64 = 2*o*pi+(-1)^o*acos((arrCache.oe_arr_SoI_guess[1]*(1-arrCache.oe_arr_SoI_guess[2]^2)/r_int-1)/arrCache.oe_arr_SoI_guess[2])
     omega_arr_guess::Float64 = (u_arr_guess-(theta_arr_int_guess+n*pi) > 0) ? u_arr_guess-(theta_arr_int_guess+n*pi) : 2*pi+u_arr_guess-(theta_arr_int_guess+n*pi)
-    sigma_guess::Float64 = atan(cos(env.oe_arrBody[3])*tan(env.oe_arrBody[4]))+omega_arr_guess+arrCache.oe_arr_SoI_guess[6]
+    sigma_guess::Float64 = atan(cos(env.oe_arrBody[3])*sin(env.oe_arrBody[4]), cos(env.oe_arrBody[4]))+omega_arr_guess+arrCache.oe_arr_SoI_guess[6]
     delta::Float64 = atan(q_arr_SoI[2], q_arr_SoI[1])
     X_guess::Vector{Float64} = [theta_bridge_int_guess, sigma_guess-(env.oe_arrBody[4]+env.oe_arrBody[5]+env.oe_arrBody[6])-delta, theta_arr_int_guess]
     X::Vector{Float64} = correct(targeter, env, X_guess, oe_bridge_peri, q_arr_SoI)
