@@ -3,7 +3,7 @@ Arrival phase targeter for CR3BP MMATs
 
 Author: Jonathan LeFevre Richmond
 C: 1/30/26
-U: 2/16/26
+U: 2/23/26
 """
 
 using MBD, LinearAlgebra
@@ -137,15 +137,14 @@ Return corrected multiple shooter problem for exterior transfer
 - `q_arr_SoI::Vector{Float64}`: Arrival SoI state in CR3BP rotating frame [ndim]
 """
 function correct_ext(targeter::MMATArrivalPhaseTargeter, env::MMATEnv, X::Vector{Float64}, oe_bridge_peri::Vector{Float64}, q_arr_SoI::Vector{Float64})
-    F::Vector{Float64} = -1.0 .* evaluateConstraints_ext(targeter, env, X, oe_bridge_peri, q_arr_SoI)
+    F::Vector{Float64} = -evaluateConstraints_ext(targeter, env, X, oe_bridge_peri, q_arr_SoI)
     iter::Int64 = 1
     while (LinearAlgebra.norm(F) >= 1E-5) && (iter <= 50)
         DF::Matrix{Float64} = centralDifference_ext(targeter, env, X, oe_bridge_peri, q_arr_SoI)
         solver = LinearAlgebra.qr(DF, LinearAlgebra.ColumnNorm())
         dX::Vector{Float64} = solver\F
-        alpha::Float64 = 1.0#(LinearAlgebra.norm(F) > 5000) ? 0.1 : 1.0
-        X += alpha.*dX
-        F = -1.0 .* evaluateConstraints_ext(targeter, env, X, oe_bridge_peri, q_arr_SoI)
+        X += dX
+        F = -evaluateConstraints_ext(targeter, env, X, oe_bridge_peri, q_arr_SoI)
         iter += 1
     end
 
@@ -167,15 +166,14 @@ Return corrected multiple shooter problem for interior transfer
 - `e_bridge::Float64`: Bridge arc eccentricity
 """
 function correct_int(targeter::MMATArrivalPhaseTargeter, env::MMATEnv, X::Vector{Float64}, oe_dep_SoI::Vector{Float64}, q_arr_SoI::Vector{Float64}, a_bridge::Float64, e_bridge::Float64)
-    F::Vector{Float64} = -1.0 .* evaluateConstraints_int(targeter, env, X, oe_dep_SoI, q_arr_SoI, a_bridge, e_bridge)
+    F::Vector{Float64} = -evaluateConstraints_int(targeter, env, X, oe_dep_SoI, q_arr_SoI, a_bridge, e_bridge)
     iter::Int64 = 1
     while (LinearAlgebra.norm(F) >= 1E-5) && (iter <= 50)
         DF::Matrix{Float64} = centralDifference_int(targeter, env, X, oe_dep_SoI, q_arr_SoI, a_bridge, e_bridge)
         solver = LinearAlgebra.qr(DF, LinearAlgebra.ColumnNorm())
         dX::Vector{Float64} = solver\F
-        alpha::Float64 = 1.0#(LinearAlgebra.norm(F) > 5000) ? 0.1 : 1.0
-        X += alpha.*dX
-        F = -1.0 .* evaluateConstraints_int(targeter, env, X, oe_dep_SoI, q_arr_SoI, a_bridge, e_bridge)
+        X += dX
+        F = -evaluateConstraints_int(targeter, env, X, oe_dep_SoI, q_arr_SoI, a_bridge, e_bridge)
         iter += 1
     end
 
