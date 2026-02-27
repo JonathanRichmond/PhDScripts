@@ -3,7 +3,7 @@ Script for computing CR3BP MMATs between Earth-Moon and Sun-planet systems
 
 Author: Jonathan LeFevre Richmond
 C: 1/24/26
-U: 2/23/26
+U: 2/27/26
 """
 
 module MMATCR3BP
@@ -35,6 +35,12 @@ struct ArrCache
     r_arr_u::Float64
     t_arrival::Float64
     t_orbitArrival::Float64
+end
+
+struct ArrivalCase
+    JCs::Vector{Vector{Float64}}
+    mode::Symbol
+    planet::String
 end
 
 struct CharValues
@@ -119,8 +125,9 @@ function setupEnvironment(eph::Ephemerides.EphemerisProvider, arrBody::String)::
 
     initialEpoch::String = "Jan 1 2030"
     initialEpochTime::Float64 = SPICE.str2et(initialEpoch)
-    days::Vector{Float64} = collect(0.0:1.0:30.0)
+    days::Vector{Float64} = collect(0.0:1.0:5.0)
     # days::Vector{Float64} = collect(0.0:1.0:364.0)
+    # days::Vector{Float64} = collect((10*365.0):1.0:(11*365.0-1.0)) # 2040
     epochTimes::Vector{Float64} = initialEpochTime .+ days .* 3600 .* 24
     epochs::Vector{String} = [SPICE.et2utc(et, "C", 0) for et in epochTimes]
 
@@ -181,13 +188,13 @@ function computeArrivalArc_ext(env::MMATEnv, targeter, arrBody::String, family::
     lstar::Float64 = env.charValues.SArr.lstar
     tstar::Float64 = env.charValues.SArr.tstar
 
-    coarseOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPS$(arrBody[firstindex(arrBody)])$(family)s.csv", "JC", JC)
+    coarseOrbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPS$(arrBody[firstindex(arrBody)])$(family)s.csv", "JC", JC; JTol = 0.01)
     if flip
         if occursin("Halo", family)
             (coarseOrbit.initialCondition[3] *= -1) # Flip to northern halo
         end
     end
-    solution::MBD.CR3BPMultipleShooterProblem = correct(targeter, coarseOrbit.initialCondition, [0, coarseOrbit.period], JC)
+    solution::MBD.CR3BPMultipleShooterProblem = correct(targeter, coarseOrbit.initialCondition, [0, coarseOrbit.period], JC; JTol = 0.01)
     orbit = MBD.CR3BPPeriodicOrbit(dynamicsModel, solution.nodes[1].state.data[1:6], getPeriod(targeter, solution), getMonodromy(targeter, solution))
     println("Converged Sun-$arrBody orbit:\n\tIC:\t$(orbit.initialCondition)\n\tP:\t$(orbit.period)\n\tJC:\t$(getJacobiConstant(orbit))\n")
 
@@ -267,7 +274,7 @@ function computeArrivalArc_int(env::MMATEnv, targeter, arrBody::String, family::
         manifoldArc::MBD.CR3BPManifoldArc = stableManifoldArcs[a]
         arc::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.P2DistanceEvent, real(manifoldArc.initialCondition), [0, manifoldArc.TOF], dynamicsModel, [env.arrSoI])
         (abs(getTimeByIndex(arc, -1)) == abs(manifoldArc.TOF)) && continue
-        localArc = MBD.CR3BPManifoldArc(manifoldArc.periodicOrbit, manifoldArc.orbitTime, manifoldArc.d, manifoldArc.initialCondition, getTimeByIndex(arc, -1))
+        localArc = MBD.CR3BPManifoldArc(manifoldArc.periodicOrbit, manifoldArc.orbitTime, manifoldArc.direction, manifoldArc.d, manifoldArc.initialCondition, getTimeByIndex(arc, -1))
         q_SoI_SI::Vector{Float64} = rotatingToPrimaryInertial(dynamicsModel, 1, [getStateByIndex(arc, -1)], [0.0])[1]
         @views Q_SoI_SI = similar(q_SoI_SI)
         Q_SoI_SI[1:3] .= q_SoI_SI[1:3].*lstar
@@ -622,7 +629,7 @@ function computeMMATs_int(env::MMATEnv, targeter::MMATArrivalPhaseTargeter, depA
 end
 
 function run_MMATCR3BP_ext(arrBody::String, EMFamily::String, EMJC::Float64, SArrFamily::String, SArrJC::Float64; EMFlip::Bool = false, SArrFlip::Bool = false)
-    mf = MATLAB.MatFile("Output/MMAT/$(arrBody)MMATCR3BP_$(replace(string(EMJC), '.' => '_'))_$(EMFamily)_$(replace(string(SArrJC), '.' => '_'))_$(SArrFamily).mat", "w")
+    mf = MATLAB.MatFile("Output/MMAT/$(arrBody)MMATCR3BP_$(replace(string(EMJC), '.' => '_'))_$(EMFamily)_flip$(EMFlip)_$(replace(string(SArrJC), '.' => '_'))_$(SArrFamily)_flip$(SArrFlip).mat", "w")
     eph = Ephemerides.EphemerisProvider(["SPICEKernels/de430.bsp", "SPICEKernels/de440.bsp", "SPICEKernels/mar099s.bsp"])
     
     SPICE.furnsh("SPICEKernels/naif0012.tls")
@@ -642,7 +649,7 @@ function run_MMATCR3BP_ext(arrBody::String, EMFamily::String, EMJC::Float64, SAr
 end
 
 function run_MMATCR3BP_int(arrBody::String, EMFamily::String, EMJC::Float64, SArrFamily::String, SArrJC::Float64; EMFlip::Bool = false, SArrFlip::Bool = false)
-    mf = MATLAB.MatFile("Output/MMAT/$(arrBody)MMATCR3BP_$(replace(string(EMJC), '.' => '_'))_$(EMFamily)_$(replace(string(SArrJC), '.' => '_'))_$(SArrFamily).mat", "w")
+    mf = MATLAB.MatFile("Output/MMAT/$(arrBody)MMATCR3BP_$(replace(string(EMJC), '.' => '_'))_$(EMFamily)_flip$(EMFlip)_$(replace(string(SArrJC), '.' => '_'))_$(SArrFamily)_flip$(SArrFlip).mat", "w")
     eph = Ephemerides.EphemerisProvider(["SPICEKernels/de430.bsp", "SPICEKernels/de440.bsp", "SPICEKernels/mar099s.bsp"])
     
     SPICE.furnsh("SPICEKernels/naif0012.tls")
@@ -659,6 +666,53 @@ function run_MMATCR3BP_int(arrBody::String, EMFamily::String, EMJC::Float64, SAr
     computeMMATs_int(env, MMATTargeter, depArcs, depCache, arrArc, arrCache, mf)
 
     MATLAB.close(mf)
+end
+
+function populateJobs(depJCs::Vector{Float64})
+    arrOrbits::Vector{String} = ["L1Lyapunov", "L1Halo", "L2Lyapunov", "L2Halo"]
+    arrJCsMars::Vector{Vector{Float64}} = [[3.0002, 3.0001, 3.0], [3.000187, 3.00012, 3.00006], [3.0002, 3.0001, 3.0], [3.000186, 3.00012, 3.00007]]
+    arrJCsVenus::Vector{Vector{Float64}} = [[3.0007, 3.00035, 3.0], [3.000714, 3.0005, 3.0003], [3.0007, 3.00035, 3.0], [3.000713, 3.0005, 3.0003]]
+    cases::Vector{ArrivalCase} = [ArrivalCase(arrJCsMars, :ext, "Mars"), ArrivalCase(arrJCsVenus, :int, "Venus")]
+
+    jobs = Vector{Tuple{String, Symbol, Float64, String, Float64, Bool}}()
+    for depJC::Float64 in depJCs
+        for (o::Int64, arrOrbit::String) in enumerate(arrOrbits)
+            for case::ArrivalCase in cases
+                for arrJC::Float64 in case.JCs[o]
+                    push!(jobs, (case.planet, case.mode, depJC, arrOrbit, arrJC, false))
+                    if occursin("Halo", arrOrbit)
+                        push!(jobs, (case.planet, case.mode, depJC, arrOrbit, arrJC, true))
+                    end
+                end
+            end
+        end
+    end
+
+    return jobs
+end
+
+function run_MMATAnalysis(depOrbit::String, depFlip::Bool, jobs)
+    failedJobs = Vector{Tuple{String, Symbol, Float64, String, Float64, Bool, Any}}()
+    for (planet::String, mode::Symbol, depJC::Float64, arrOrbit::String, arrJC::Float64, arrFlip::Bool) in jobs
+        if mode == :ext
+            println("\nRunning MMAT for exterior transfer from Earth-Moon $depJC $depOrbit (flip = $depFlip) to Sun-$planet $arrJC $arrOrbit (flip = $arrFlip):\n")
+            try
+                MMATCR3BP.run_MMATCR3BP_ext(planet, depOrbit, depJC, arrOrbit, arrJC; EMFlip = depFlip, SArrFlip = arrFlip)
+            catch err
+                push!(failedJobs, (planet, mode, depJC, arrOrbit, arrJC, arrFlip, err))
+            end
+        else
+            println("\nRunning MMAT for interior transfer from Earth-Moon $depJC $depOrbit (flip = $depFlip) to Sun-$planet $arrJC $arrOrbit (flip = $arrFlip):\n")
+            try
+                MMATCR3BP.run_MMATCR3BP_int(planet, depOrbit, depJC, arrOrbit, arrJC; EMFlip = depFlip, SArrFlip = arrFlip)
+            catch err
+                push!(failedJobs, (planet, mode, depJC, arrOrbit, arrJC, arrFlip, err))
+            end
+        end
+    end
+    println("Jobs failed: $(length(failedJobs))")
+
+    return failedJobs
 end
 
 end # MMATCR3BP
