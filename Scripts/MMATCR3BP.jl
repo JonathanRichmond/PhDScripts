@@ -125,8 +125,8 @@ function setupEnvironment(eph::Ephemerides.EphemerisProvider, arrBody::String)::
 
     initialEpoch::String = "Jan 1 2030"
     initialEpochTime::Float64 = SPICE.str2et(initialEpoch)
-    days::Vector{Float64} = collect(0.0:1.0:5.0)
-    # days::Vector{Float64} = collect(0.0:1.0:364.0)
+    # days::Vector{Float64} = collect(0.0:1.0:5.0)
+    days::Vector{Float64} = collect(0.0:1.0:364.0)
     # days::Vector{Float64} = collect((10*365.0):1.0:(11*365.0-1.0)) # 2040
     epochTimes::Vector{Float64} = initialEpochTime .+ days .* 3600 .* 24
     epochs::Vector{String} = [SPICE.et2utc(et, "C", 0) for et in epochTimes]
@@ -691,14 +691,15 @@ function populateJobs(depJCs::Vector{Float64})
     return jobs
 end
 
-function run_MMATAnalysis(depOrbit::String, depFlip::Bool, jobs)
+function MMATAnalysis(depOrbit::String, depFlip::Bool, jobs)
     failedJobs = Vector{Tuple{String, Symbol, Float64, String, Float64, Bool, Any}}()
-    for (planet::String, mode::Symbol, depJC::Float64, arrOrbit::String, arrJC::Float64, arrFlip::Bool) in jobs
+    for (j::Int64, (planet::String, mode::Symbol, depJC::Float64, arrOrbit::String, arrJC::Float64, arrFlip::Bool)) in enumerate(jobs)
         if mode == :ext
-            println("\nRunning MMAT for exterior transfer from Earth-Moon $depJC $depOrbit (flip = $depFlip) to Sun-$planet $arrJC $arrOrbit (flip = $arrFlip):\n")
+            println("\nJob $j/$(length(jobs)): Running MMAT for exterior transfer from Earth-Moon $depJC $depOrbit (flip = $depFlip) to Sun-$planet $arrJC $arrOrbit (flip = $arrFlip):\n")
             try
                 MMATCR3BP.run_MMATCR3BP_ext(planet, depOrbit, depJC, arrOrbit, arrJC; EMFlip = depFlip, SArrFlip = arrFlip)
             catch err
+                println("\nJob failed")
                 push!(failedJobs, (planet, mode, depJC, arrOrbit, arrJC, arrFlip, err))
             end
         else
@@ -706,6 +707,7 @@ function run_MMATAnalysis(depOrbit::String, depFlip::Bool, jobs)
             try
                 MMATCR3BP.run_MMATCR3BP_int(planet, depOrbit, depJC, arrOrbit, arrJC; EMFlip = depFlip, SArrFlip = arrFlip)
             catch err
+                println("\nJob failed")
                 push!(failedJobs, (planet, mode, depJC, arrOrbit, arrJC, arrFlip, err))
             end
         end
