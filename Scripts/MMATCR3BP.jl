@@ -126,7 +126,7 @@ function setupEnvironment(eph::Ephemerides.EphemerisProvider, arrBody::String)::
     initialEpoch::String = "Jan 1 2030"
     initialEpochTime::Float64 = SPICE.str2et(initialEpoch)
     # days::Vector{Float64} = collect(0.0:1.0:5.0)
-    days::Vector{Float64} = collect(0.0:1.0:364.0)
+    days::Vector{Float64} = collect(0.0:2.0:364.0)
     # days::Vector{Float64} = collect((10*365.0):1.0:(11*365.0-1.0)) # 2040
     epochTimes::Vector{Float64} = initialEpochTime .+ days .* 3600 .* 24
     epochs::Vector{String} = [SPICE.et2utc(et, "C", 0) for et in epochTimes]
@@ -703,7 +703,7 @@ function MMATAnalysis(depOrbit::String, depFlip::Bool, jobs)
                 push!(failedJobs, (planet, mode, depJC, arrOrbit, arrJC, arrFlip, err))
             end
         else
-            println("\nRunning MMAT for interior transfer from Earth-Moon $depJC $depOrbit (flip = $depFlip) to Sun-$planet $arrJC $arrOrbit (flip = $arrFlip):\n")
+            println("\nJob $j/$(length(jobs)): Running MMAT for interior transfer from Earth-Moon $depJC $depOrbit (flip = $depFlip) to Sun-$planet $arrJC $arrOrbit (flip = $arrFlip):\n")
             try
                 MMATCR3BP.run_MMATCR3BP_int(planet, depOrbit, depJC, arrOrbit, arrJC; EMFlip = depFlip, SArrFlip = arrFlip)
             catch err
