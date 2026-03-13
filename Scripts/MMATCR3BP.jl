@@ -3,7 +3,7 @@ Script for computing CR3BP MMATs between Earth-Moon and Sun-planet systems
 
 Author: Jonathan LeFevre Richmond
 C: 1/24/26
-U: 2/27/26
+U: 3/13/26
 """
 
 module MMATCR3BP
@@ -15,7 +15,9 @@ global_logger(ConsoleLogger(stderr, Logging.Warn)) # Debug, Info, Warn, Error
 
 include("../CR3BPTargeters/MMATArrivalPhase.jl")
 include("../CR3BPTargeters/PlanarPerpJC.jl")
+include("../CR3BPTargeters/SpatialAxialJC.jl")
 include("../CR3BPTargeters/SpatialPerpJC.jl")
+include("../CR3BPTargeters/SpatialVerticalJC.jl")
 include("../Utilities/Export.jl")
 include("../Utilities/Frames.jl")
 
@@ -26,7 +28,12 @@ const sysParams = Dict{String, Tuple{Float64, Float64}}("Venus" => (0.1107, 1E-5
 const targeterMap = Dict{}("L1Lyapunov" => PlanarPerpJCTargeter,
                            "L2Lyapunov" => PlanarPerpJCTargeter,
                            "L1Halo" => SpatialPerpJCTargeter,
-                           "L2Halo" => SpatialPerpJCTargeter)
+                           "L2Halo" => SpatialPerpJCTargeter,
+                           "L1Axial" => SpatialAxialJCTargeter,
+                           "L2Axial" => SpatialAxialJCTargeter,
+                           "L1Vertical" => SpatialVerticalJCTargeter,
+                           "L2Vertical" => SpatialVerticalJCTargeter,
+                           "L2Butterfly" => SpatialPerpJCTargeter)
 
 struct ArrCache
     arc::MBD.CR3BPArc
@@ -127,7 +134,7 @@ function setupEnvironment(eph::Ephemerides.EphemerisProvider, arrBody::String)::
     initialEpochTime::Float64 = SPICE.str2et(initialEpoch)
     # days::Vector{Float64} = collect(0.0:1.0:5.0)
     days::Vector{Float64} = collect(0.0:2.0:364.0)
-    # days::Vector{Float64} = collect((10*365.0):1.0:(11*365.0-1.0)) # 2040
+    # days::Vector{Float64} = collect((8*365.0):1.0:(9*365.0-1.0)) # 2038
     epochTimes::Vector{Float64} = initialEpochTime .+ days .* 3600 .* 24
     epochs::Vector{String} = [SPICE.et2utc(et, "C", 0) for et in epochTimes]
 
@@ -150,6 +157,10 @@ function computeDepartureArcs(env::MMATEnv, targeter, family::String, JC::Float6
     if flip
         if occursin("Halo", family)
             (coarseOrbit.initialCondition[3] *= -1) # Flip to northern halo
+        elseif occursin("Axial", family)
+            (coarseOrbit.initialCondition[6] *= -1) # Flip to southern axial (depends on Lagrange point, east for L1, west for L2)
+        elseif occursin("Butterfly", family)
+            (coarseOrbit.initialCondition[3] *= -1) # Flip to northern butterfly
         end
     end
     solution::MBD.CR3BPMultipleShooterProblem = correct(targeter, coarseOrbit.initialCondition, [0, coarseOrbit.period], JC)
