@@ -3,7 +3,7 @@ Script for computing CR3BP MMATs between Earth-Moon and Sun-planet systems
 
 Author: Jonathan LeFevre Richmond
 C: 1/24/26
-U: 3/13/26
+U: 4/1/26
 """
 
 module MMATCR3BP
@@ -702,6 +702,28 @@ function populateJobs(depJCs::Vector{Float64})
     return jobs
 end
 
+function populateJobsArr(arrJCs::Vector{Float64})
+    depOrbits::Vector{String} = ["L1Lyapunov", "L1Halo", "L1Vertical", "L1Axial", "L2Lyapunov", "L2Halo", "L2Vertical", "L2Axial", "L2Butterfly"]
+    depJCs::Vector{Float64} = [3.13, 3.1, 3.07, 3.03, 3.0, 2.97]
+    depIndices::Vector{Vector{Int64}} = [collect(1:6), collect(1:4), collect(1:6), [5], collect(1:6), collect(1:4), collect(1:6), collect(5:6), collect(3:6)]
+    arrJCsMars::Vector{Vector{Float64}} = [arrJCs]
+    case = ArrivalCase(arrJCsMars, :ext, "Mars")
+
+    jobs = Vector{Tuple{String, Symbol, String, Float64, Float64, Bool}}()
+    for (o::Int64, depOrbit::String) in enumerate(depOrbits)
+        for depJC::Float64 in depJCs[depIndices[o]]
+            for arrJC::Float64 in case.JCs[1]
+                push!(jobs, (case.planet, case.mode, depOrbit, depJC, arrJC, false))
+                if occursin("Halo", depOrbit) || occursin("Axial", depOrbit) || occursin("Butterfly", depOrbit)
+                    push!(jobs, (case.planet, case.mode, depOrbit, depJC, arrJC, true))
+                end
+            end
+        end
+    end
+
+    return jobs
+end
+
 function MMATAnalysis(depOrbit::String, depFlip::Bool, jobs)
     failedJobs = Vector{Tuple{String, Symbol, Float64, String, Float64, Bool, Any}}()
     for (j::Int64, (planet::String, mode::Symbol, depJC::Float64, arrOrbit::String, arrJC::Float64, arrFlip::Bool)) in enumerate(jobs)
@@ -720,6 +742,32 @@ function MMATAnalysis(depOrbit::String, depFlip::Bool, jobs)
             catch err
                 println("\nJob failed")
                 push!(failedJobs, (planet, mode, depJC, arrOrbit, arrJC, arrFlip, err))
+            end
+        end
+    end
+    println("Jobs failed: $(length(failedJobs))")
+
+    return failedJobs
+end
+
+function MMATAnalysisArr(arrOrbit::String, arrFlip::Bool, jobs)
+    failedJobs = Vector{Tuple{String, Symbol, String, Float64, Float64, Bool, Any}}()
+    for (j::Int64, (planet::String, mode::Symbol, depOrbit::String, depJC::Float64, arrJC::Float64, depFlip::Bool)) in enumerate(jobs)
+        if mode == :ext
+            println("\nJob $j/$(length(jobs)): Running MMAT for exterior transfer from Earth-Moon $depJC $depOrbit (flip = $depFlip) to Sun-$planet $arrJC $arrOrbit (flip = $arrFlip):\n")
+            try
+                MMATCR3BP.run_MMATCR3BP_ext(planet, depOrbit, depJC, arrOrbit, arrJC; EMFlip = depFlip, SArrFlip = arrFlip)
+            catch err
+                println("\nJob failed")
+                push!(failedJobs, (planet, mode, depOrbit, depJC, arrJC, depFlip, err))
+            end
+        else
+            println("\nJob $j/$(length(jobs)): Running MMAT for interior transfer from Earth-Moon $depJC $depOrbit (flip = $depFlip) to Sun-$planet $arrJC $arrOrbit (flip = $arrFlip):\n")
+            try
+                MMATCR3BP.run_MMATCR3BP_int(planet, depOrbit, depJC, arrOrbit, arrJC; EMFlip = depFlip, SArrFlip = arrFlip)
+            catch err
+                println("\nJob failed")
+                push!(failedJobs, (planet, mode, depOrbit, depJC, arrJC, depFlip, err))
             end
         end
     end
