@@ -153,8 +153,7 @@ function countApses(env::EscEnv, primary::Int64, apse::Symbol, IC::AbstractVecto
     return eventTrackers
 end
 
-function apseMapCR3BP(env::EscEnv, JC::Float64, n::Int64, primary::Int64, mf::MATLAB.MatFile; apse::Symbol = :peri, grade::Symbol = :pro)
-    rGrid::Matrix{StaticArrays.SVector{2, Float64}} = getGrid(env, n, primary)
+function apseMapCR3BP(env::EscEnv, JC::Float64, n::Int64, primary::Int64, rGrid::Matrix{StaticArrays.SVector{2, Float64}}, mf::MATLAB.MatFile; apse::Symbol = :peri, grade::Symbol = :pro)
     qGrid::Matrix{StaticArrays.MVector{6, Float64}} = computeApseStates(env, primary, JC, apse, grade, rGrid)
 
     flags::Matrix{Int64} = fill(9, size(qGrid))
@@ -198,7 +197,7 @@ function apseMapCR3BP(env::EscEnv, JC::Float64, n::Int64, primary::Int64, mf::MA
     apoStates::Vector{StaticArrays.SVector{6, Float64}} = reduce(vcat, apoapses[validApo])
     apoIndices::Vector{CartesianIndex{2}} = reduce(vcat, [fill(idx, length(apoapses[idx])) for idx in validApo])
     apoLinear::Vector{Int64} = [LinearIndices(apoapses)[idx] for idx in apoIndices]
-    exportCR3BPApseMap(env.EMDynamicsModel, primary, apse, grade, JC, qGrid, flags, counts, periStates, periLinear, apoStates, apoLinear, mf, :map)
+    exportCR3BPApseMap(env.EMDynamicsModel, primary, apse, grade, JC, qGrid, flags, counts, periStates, periLinear, apoStates, apoLinear, mf, Symbol("map_", replace(string(JC), "." => "_")))
 end
 
 function run_apseMapCR3BP(JC::Float64, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro)
@@ -206,8 +205,24 @@ function run_apseMapCR3BP(JC::Float64, n::Int64, primary::Int64; apse::Symbol = 
         
     env::EscEnv = setupEnvironment()
 
-    apseMapCR3BP(env, JC, n, primary, mf; apse = apse, grade = grade)
+    rGrid::Matrix{StaticArrays.SVector{2, Float64}} = getGrid(env, n, primary)
+    apseMapCR3BP(env, JC, n, primary, rGrid, mf; apse = apse, grade = grade)
     
+    MATLAB.close(mf)
+end
+
+function run_apseMapsCR3BP(JCs::Vector{Float64}, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro)
+    mf = MATLAB.MatFile("Output/ApseMaps/CR3BPJCVolume_$(string(primary))_$(string(apse))_$(string(grade))_$(string(n))_$(minimum(JCs))_$(maximum(JCs)).mat", "w")
+
+    env::EscEnv = setupEnvironment()
+
+    rGrid::Matrix{StaticArrays.SVector{2, Float64}} = getGrid(env, n, primary)
+    o::Int64 = length(JCs)
+    for j::Int64 in eachindex(JCs)
+        println("\nProducing map $j / $o: JC = $(JCs[j])...")
+        apseMapCR3BP(env, JCs[j], n, primary, rGrid, mf; apse = apse, grade = grade)
+    end
+
     MATLAB.close(mf)
 end
 
