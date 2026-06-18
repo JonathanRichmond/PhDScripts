@@ -3,16 +3,17 @@ Export utility functions
 
 Author: Jonathan LeFevre Richmond
 C: 2/19/25
-U: 2/16/26
+U: 6/18/26
 """
 
-using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, MATLAB
+using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, MATLAB, StaticArrays
 
 export CSVExportCR3BPFamily, exportArrays, exportBCR4BP12Manifold, exportBCR4BP12Orbit
-export exportBCR4BP12Trajectory, exportBCR4BP41Trajectory, exportCR3BPManifold, exportCR3BPMMAT_ext
-export exportCR3BPMMAT_int, exportCR3BPOrbit, exportCR3BPTrajectory, exportInertialTrajectory
-export exportPseudoManifold, fullExportCR3BPFamily, MATExportCR3BPOrbFamily
-export MATExportCR3BPTrajFamily
+export exportBCR4BP12Trajectory, exportBCR4BP41Trajectory, exportCR3BPApseMap, exportCR3BPManifold
+export exportCR3BPMMAT_ext, exportCR3BPMMAT_int, exportCR3BPOrbit, exportCR3BPTrajectory
+export exportInertialTrajectory, exportPseudoManifold, fullExportCR3BPFamily
+export MATExportCR3BPOrbFamily, MATExportCR3BPTrajFamily
+
 
 """
     Arrays(vectors)
@@ -187,6 +188,50 @@ struct Conic
 
     function Conic(dynamicsModel::MBD.KDynamicsModel, oe::Vector{Float64}, TOF::Float64)
         this = new(oe[1], oe[2], oe[3], oe[4], oe[5], getCartesianState(dynamicsModel, oe), oe[6], TOF)
+
+        return this
+    end
+end
+
+"""
+    CR3BPApseMap(dynamicsModel, primary, apse, grade, JC, q, flags, counts, periapses, periapsesIndices, apoapses, apoapsesIndices)
+
+CR3BP apse map export object
+
+# Arguments
+- `dynamicsModel::CR3BPDynamicsModel`: CR3BP dynamics model object
+- `primary::Int64`: Central primary identifier
+- `apse::Symbol`: Apse type
+- `grade::Symbol`: Grade type
+- `JC::Float64`: Jacobi constant
+- `q::Matrix{Float64}`: Map states [ndim]
+- `flags::Matrix{Int64}`: Event flags
+- `counts::Matrix{Int64}`: Number of relevant apses
+- `periapses::Matrix{Float64}`: Periapses states [ndim]
+- `periapsesIndices::Vector{Int64}`: Periapses assignment indices
+- `apoapses::Matrix{Float64}`: Apoapses states [ndim]
+- `apoapsesIndices::Vector{Int64}`: Apoapses assignment indices
+"""
+struct CR3BPApseMap
+    apoapses::Matrix{Float64}                                           # Apoapses states
+    apoapsesIndices::Vector{Int64}                                      # Apoapses assignment indices
+    apse::String                                                        # Apse type
+    counts::Matrix{Int64}                                               # Relevant apse counts
+    flags::Matrix{Int64}                                                # Event flags
+    grade::String                                                       # Grade type
+    JC::Float64                                                         # Jacobi constant
+    periapses::Matrix{Float64}                                          # Periapses states
+    periapsesIndices::Vector{Int64}                                     # Periapses assignment indices
+    primary::String                                                     # Central primary identifier
+    q::Matrix{Float64}                                                  # States
+
+    function CR3BPApseMap(dynamicsModel::MBD.CR3BPDynamicsModel, primary::Int64, apse::Symbol, grade::Symbol, JC::Float64, q::Matrix{Float64}, flags::Matrix{Int64}, counts::Matrix{Int64}, periapses::Matrix{Float64}, periapsesIndices::Vector{Int64}, apoapses::Matrix{Float64}, apoapsesIndices::Vector{Int64})
+        if primary == 0
+            primaryName::String = "Barycenter"
+        else
+            primaryName = dynamicsModel.systemData.primaryNames[primary]
+        end
+        this = new(apoapses, apoapsesIndices, String(apse), counts, flags, String(grade), JC, periapses, periapsesIndices, primaryName, q)
 
         return this
     end
@@ -897,6 +942,35 @@ Export BCR4BP P4-B1 trajectory data to MAT file
 function exportBCR4BP41Trajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta2::Vector{Float64}, t::Vector{Float64}, H::Vector{Float64}, TOF::Float64, file::MATLAB.MatFile, name::Symbol)
     traj = BCR4BP41Traj(x, y, z, xdot, ydot, zdot, theta2, t, H, TOF)
     MATLAB.put_variable(file, name, traj)
+end
+
+"""
+    exportCR3BPApseMap(dynamicsModel, primary, apse, grade, JC, qGrid, flags, count, periapses, periapsesIndices, apoapses, apoapsesIndices, file, name)
+
+Export CR3BP apse map data to MAT file
+
+# Arguments
+- `dynamicsModel::MBD.CR3BPDynamicsModel`: CR3BP dynamics model object
+- `primary::Int64`: Central primary identifier
+- `apse::Symbol`: Apse type
+- `grade::Symbol`: Grade type
+- `JC::Float64`: Jacobi constant
+- `qGrid::Matrix{StaticArrays.MVector{6, Float64}}`: Grid states
+- `flags::Matrix{Float64}`: Event flag indicators
+- `count::Matrix{Int64}`: Number of relevant apses before event
+- `periapses::Vector{SVector{6, Float64}}`: Periapses states
+- `periapsesIndices::Vector{Int64}`: Periapses indices
+- `apoapses::Vector{SVector{6, Float64}}`: Apoapses states
+- `apoapsesIndices::Vector{Int64}`: Apoapses indices
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportCR3BPApseMap(dynamicsModel::MBD.CR3BPDynamicsModel, primary::Int64, apse::Symbol, grade::Symbol, JC::Float64, qGrid::Matrix{StaticArrays.MVector{6, Float64}}, flags::Matrix{Int64}, count::Matrix{Int64}, periapses::Vector{StaticArrays.SVector{6, Float64}}, periapsesIndices::Vector{Int64}, apoapses::Vector{StaticArrays.SVector{6, Float64}}, apoapsesIndices::Vector{Int64}, file::MATLAB.MatFile, name::Symbol)
+    q::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), qGrid))
+    periapsesMat::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), periapses))
+    apoapsesMat::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), apoapses))
+    apseMap = CR3BPApseMap(dynamicsModel, primary, apse, grade, JC, q, flags, count, periapsesMat, periapsesIndices, apoapsesMat, apoapsesIndices)
+    MATLAB.put_variable(file, name, apseMap)
 end
 
 """

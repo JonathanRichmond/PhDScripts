@@ -3,7 +3,7 @@ Script for computing CR3BP escape trajectories in the Earth-Moon system
 
 Author: Jonathan LeFevre Richmond
 C: 6/16/26
-U: 6/17/26
+U: 6/18/26
 """
 
 module EscCR3BP
@@ -42,11 +42,14 @@ function endAffect!(integrator, index)
     if idx == 1
         if index[idx] == 1
             integrator.p[2][1].count += 1
+            push!(integrator.p[2][1].states, integrator.u)
         else
             integrator.p[2][2].count += 1
+            push!(integrator.p[2][2].states, integrator.u)
         end
     else
         integrator.p[2][idx+1].count += 1
+        push!(integrator.p[2][idx+1].states, integrator.u)
         DifferentialEquations.terminate!(integrator)
     end
 end
@@ -152,42 +155,60 @@ end
 
 function apseMapCR3BP(env::EscEnv, JC::Float64, n::Int64, primary::Int64, mf::MATLAB.MatFile; apse::Symbol = :peri, grade::Symbol = :pro)
     rGrid::Matrix{StaticArrays.SVector{2, Float64}} = getGrid(env, n, primary)
-    qGrid::Matrix{StaticArrays.SVector{6, Float64}} = computeApseStates(env, primary, JC, apse, grade, rGrid)
+    qGrid::Matrix{StaticArrays.MVector{6, Float64}} = computeApseStates(env, primary, JC, apse, grade, rGrid)
 
-    flags::Matrix{Int64} = fill(8, size(qGrid))
-    flags[map(q -> isinf(q[4]), qGrid)] .= 9
+    flags::Matrix{Int64} = fill(9, size(qGrid))
+    flags[map(q -> isinf(q[4]), qGrid)] .= 8
     valid::Matrix{Bool} = map(q -> (!isnan(q[4]) && !isinf(q[4])), qGrid) 
     qProp::Vector{StaticArrays.SVector{6, Float64}} = qGrid[valid]
     qMap::Vector{CartesianIndex{2}} = findall(valid)
-    println("Propagating $(length(qProp)) CR3BP trajectories with $(Threads.nthreads()) threads...")
+    counts::Matrix{Int64} = zeros(Int64, size(qGrid))
+    periapses::Matrix{Vector{StaticArrays.SVector{6, Float64}}} = [StaticArrays.SVector{6, Float64}[] for _ in qGrid]
+    apoapses::Matrix{Vector{StaticArrays.SVector{6, Float64}}} = [StaticArrays.SVector{6, Float64}[] for _ in qGrid]
+    println("Propagating $(length(qProp)) / $(n^2) CR3BP trajectories with $(Threads.nthreads()) threads...")
     Threads.@threads for j in eachindex(qProp)
         eventTrackers::Vector{MBD.EventTracker} = countApses(env, primary, apse, qProp[j])
+        apsesCount::Int64 = (apse == :peri ? eventTrackers[1].count : eventTrackers[2].count)
         if (eventTrackers[4].count != 0) || (eventTrackers[5].count != 0)
             flags[qMap[j]] = 7
         elseif eventTrackers[3].count != 0
-            apses::Int64 = (apse == :peri ? eventTrackers[1].count : eventTrackers[2].count)
-            flags[qMap[j]] = min(apses, 5)
+            flags[qMap[j]] = min(apsesCount, 5)
         else
             flags[qMap[j]] = 6
         end
+        counts[qMap[j]] = apsesCount
+        periapses[qMap[j]] = map(q -> StaticArrays.SVector{6, Float64}(q), eventTrackers[1].states)
+        apoapses[qMap[j]] = map(q -> StaticArrays.SVector{6, Float64}(q), eventTrackers[2].states)
     end
 
-    return (qGrid, flags)
+    flagCounts::Vector{Int64} = [count(==(f), flags) for f in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]]
+    println("\tDirect escapes:\t$(flagCounts[1])")
+    println("\tLonger escapes:\t$(sum(flagCounts[2:6]))")
+    println("\tCaptures:\t$(flagCounts[7])")
+    println("\tCrashes:\t$(flagCounts[8])")
+    println("\tInvalid apses:\t$(flagCounts[9])")
+    println("\tZVCs:\t\t$(flagCounts[10])")
+
+    println("Exporting map...")
+    validPeri::Vector{CartesianIndex{2}} = findall(!isempty, periapses)
+    validApo::Vector{CartesianIndex{2}} = findall(!isempty, apoapses)
+    periStates::Vector{StaticArrays.SVector{6, Float64}} = reduce(vcat, periapses[validPeri])
+    periIndices::Vector{CartesianIndex{2}} = reduce(vcat, [fill(idx, length(periapses[idx])) for idx in validPeri])
+    periLinear::Vector{Int64} = [LinearIndices(periapses)[idx] for idx in periIndices]
+    apoStates::Vector{StaticArrays.SVector{6, Float64}} = reduce(vcat, apoapses[validApo])
+    apoIndices::Vector{CartesianIndex{2}} = reduce(vcat, [fill(idx, length(apoapses[idx])) for idx in validApo])
+    apoLinear::Vector{Int64} = [LinearIndices(apoapses)[idx] for idx in apoIndices]
+    exportCR3BPApseMap(env.EMDynamicsModel, primary, apse, grade, JC, qGrid, flags, counts, periStates, periLinear, apoStates, apoLinear, mf, :map)
 end
 
-function run_apseMapCR3BP(JC::Float64, n::Int64, primary::Int64; apse::Symbol =:peri, grade::Symbol = :pro)
-    mf = MATLAB.MatFile("Output/ApseMaps/Periapsis.mat", "w")
+function run_apseMapCR3BP(JC::Float64, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro)
+    mf = MATLAB.MatFile("Output/ApseMaps/TestMap.mat", "w")
         
     env::EscEnv = setupEnvironment()
 
-    (qGrid::Matrix{StaticArrays.SVector{6, Float64}}, flags::Matrix{Int64}) = apseMapCR3BP(env, JC, n, primary, mf; apse = apse, grade = grade)
-    println("\tDirect escapes:\t$(length(findall(flags .== 0)))")
-    println("\tLonger escapes:\t$(length(findall(1 .<= flags .<= 5)))")
-    println("\tCaptures:\t$(length(findall(flags .== 6)))")
-    println("\tCrashes:\t$(length(findall(flags .== 7)))")
-    println("\tInvalid:\t$(length(findall(flags .== 8)))")
+    apseMapCR3BP(env, JC, n, primary, mf; apse = apse, grade = grade)
     
     MATLAB.close(mf)
 end
 
-end
+end # EscCR3BP
