@@ -3,7 +3,7 @@ Script for computing CR3BP escape trajectories in the Earth-Moon system
 
 Author: Jonathan LeFevre Richmond
 C: 6/16/26
-U: 6/18/26
+U: 6/25/26
 """
 
 module EscCR3BP
@@ -29,6 +29,7 @@ struct EscEnv
 
     charValues::NamedTuple
 
+    escapeEvent
     endEvents
     propagator::MBD.Propagator
 
@@ -65,6 +66,10 @@ function endConditions(out::SubArray{Float64}, state::Vector{Float64}, time::Flo
     out[4] = LinearAlgebra.norm(state[1:3]-integrator.p[6])-integrator.p[9]
 end
 
+function escapeCondition(state::Vector{Float64}, time::Float64, integrator)
+    LinearAlgebra.norm(state[1:3])-integrator.p[2]
+end
+
 function setupEnvironment()::EscEnv
     EMSystemData = MBD.CR3BPSystemData("Earth", "Moon")
     SESystemData = MBD.CR3BPSystemData("Sun", "Earth")
@@ -79,12 +84,13 @@ function setupEnvironment()::EscEnv
     
     propagator = MBD.Propagator()
     endEvents = DifferentialEquations.VectorContinuousCallback(endConditions, endAffect!, 4)
+    escapeEvent = DifferentialEquations.ContinuousCallback(escapeCondition, terminateAffect!)
 
     EarthRadius_EM::Float64 = primaries[1].bodyRadius/charValues.EM.lstar
     MoonRadius_EM::Float64 = primaries[2].bodyRadius/charValues.EM.lstar
     EarthHill_EM::Float64 = charValues.SE.lstar*cbrt(getMassRatio(SESystemData)/3)/charValues.EM.lstar
 
-    return EscEnv(EMDynamicsModel, SEDynamicsModel, primaries, Sun, charValues, endEvents, propagator, EarthHill_EM, EarthRadius_EM, MoonRadius_EM)
+    return EscEnv(EMDynamicsModel, SEDynamicsModel, primaries, Sun, charValues, escapeEvent, endEvents, propagator, EarthHill_EM, EarthRadius_EM, MoonRadius_EM)
 end
 
 function getGrid(env::EscEnv, n::Int64, primary::Int64)
@@ -200,8 +206,43 @@ function apseMapCR3BP(env::EscEnv, JC::Float64, n::Int64, primary::Int64, rGrid:
     exportCR3BPApseMap(env.EMDynamicsModel, primary, apse, grade, JC, qGrid, flags, counts, periStates, periLinear, apoStates, apoLinear, mf, Symbol("map_", replace(string(JC), "." => "_")))
 end
 
+function getMaxHeliocentricEnergy(env::EscEnv, q::Vector{Float64})
+    n_theta::Int64 = 1001
+    theta_S::Vector{Float64} = collect(range(0.0, 2.0*pi, n_theta))
+    r_B1::Float64 = env.charValues.SE.lstar
+    v_B1::Float64 = sqrt(env.Sun.gravParam/r_B1)
+    R_B1::Matrix{Float64} = r_B1.*hcat(cos.(theta_S), sin.(theta_S), zeros(Float64, n_theta))
+    V_B1::Matrix{Float64} = v_B1.*hcat(-sin.(theta_S), cos.(theta_S), zeros(Float64, n_theta))
+    Q_B1::Matrix{Float64} = hcat(R_B1, V_B1)
+    Q_EI::Vector{Float64} = [q[1], q[2], q[3], (q[4]-q[2])/env.charValues.EM.tstar, (q[5]+q[1])/env.charValues.EM.tstar, q[6]/env.charValues.EM.tstar].*env.charValues.EM.lstar
+    Q_SI::Matrix{Float64} = Q_EI' .+ Q_B1
+    E::Vector{Float64} = Vector{Float64}(undef, n_theta)
+    Threads.@threads for j::Int64 in 1:n_theta
+        E[j] = 0.5*dot(Q_SI[j,4:6], Q_SI[j,4:6])-env.Sun.gravParam/LinearAlgebra.norm(Q_SI[j,1:3])
+    end
+
+    return maximum(E)
+end
+
+function escapeAnalysisCR3BP(env::EscEnv, flags::Matrix{Int64}, qs::Matrix{Float64}, mf::MATLAB.MatFile)
+    esc0Indices::Vector{Int64} = [LinearIndices(flags)[idx] for idx in findall(flags .== 0)]
+    n_esc0::Int64 = length(esc0Indices)
+    esc0q_0s::Matrix{Float64} = qs[:,esc0Indices]
+    esc0t_fs::Vector{Float64} = Vector{Float64}(undef, n_esc0)
+    esc0Es::Vector{Float64} = Vector{Float64}(undef, n_esc0)
+    Threads.@threads for idx::Int64 in eachindex(esc0Indices)
+        arc::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.escapeEvent, qs[:,esc0Indices[idx]], [0, 12.0*pi], env.EMDynamicsModel, [env.EarthHill_EM])
+        q_f::Vector{Float64} = getStateByIndex(arc, -1)
+        esc0t_fs[idx] = getTimeByIndex(arc, -1)
+        esc0Es[idx] = getMaxHeliocentricEnergy(env, q_f)
+    end
+    MATLAB.put_variable(mf, :esc0q0, esc0q_0s)
+    MATLAB.put_variable(mf, :esc0tf, esc0t_fs)
+    MATLAB.put_variable(mf, :esc0E, esc0Es)
+end
+
 function run_apseMapCR3BP(JC::Float64, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro)
-    mf = MATLAB.MatFile("Output/ApseMaps/TestMap.mat", "w")
+    mf = MATLAB.MatFile("Output/ApseMaps/CR3BP_$(string(primary))_$(string(apse))_$(string(grade))_$(string(n))_$(string(JC)).mat", "w")
         
     env::EscEnv = setupEnvironment()
 
@@ -212,7 +253,7 @@ function run_apseMapCR3BP(JC::Float64, n::Int64, primary::Int64; apse::Symbol = 
 end
 
 function run_apseMapsCR3BP(JCs::Vector{Float64}, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro)
-    mf = MATLAB.MatFile("Output/ApseMaps/CR3BPJCVolume_$(string(primary))_$(string(apse))_$(string(grade))_$(string(n))_$(minimum(JCs))_$(maximum(JCs)).mat", "w")
+    mf = MATLAB.MatFile("Output/ApseMaps/CR3BPJCVolume_$(string(primary))_$(string(apse))_$(string(grade))_$(string(n))_$(string(minimum(JCs)))_$(string(maximum(JCs))).mat", "w")
 
     env::EscEnv = setupEnvironment()
 
@@ -224,6 +265,25 @@ function run_apseMapsCR3BP(JCs::Vector{Float64}, n::Int64, primary::Int64; apse:
     end
 
     MATLAB.close(mf)
+end
+
+function run_escapeAnalysisCR3BP(fileName::String, mapName::String)
+    mf_in = MATLAB.MatFile(fileName, "r")
+
+    map::Dict{String, Any} = get_variable(mf_in, mapName)
+
+    MATLAB.close(mf_in)
+
+    qs::Matrix{Float64} = map["q"]
+    flags::Matrix{Int64} = map["flags"]
+
+    mf_out = MATLAB.MatFile("Output/EscapeAnalysisCR3BP.mat", "w")
+
+    env::EscEnv = setupEnvironment()
+
+    escapeAnalysisCR3BP(env, flags, qs, mf_out)
+
+    MATLAB.close(mf_out)
 end
 
 end # EscCR3BP
