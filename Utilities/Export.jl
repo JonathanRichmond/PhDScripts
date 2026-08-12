@@ -3,7 +3,7 @@ Export utility functions
 
 Author: Jonathan LeFevre Richmond
 C: 2/19/25
-U: 6/18/26
+U: 8/11/26
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, MATLAB, StaticArrays
@@ -205,8 +205,8 @@ CR3BP apse map export object
 - `grade::Symbol`: Grade type
 - `JC::Float64`: Jacobi constant
 - `q::Matrix{Float64}`: Map states [ndim]
-- `flags::Matrix{Int64}`: Event flags
-- `counts::Matrix{Int64}`: Number of relevant apses
+- `flags::Vector{Int64}`: Event flags
+- `counts::Vector{Int64}`: Number of relevant apses
 - `periapses::Matrix{Float64}`: Periapses states [ndim]
 - `periapsesIndices::Vector{Int64}`: Periapses assignment indices
 - `apoapses::Matrix{Float64}`: Apoapses states [ndim]
@@ -216,8 +216,8 @@ struct CR3BPApseMap
     apoapses::Matrix{Float64}                                           # Apoapses states
     apoapsesIndices::Vector{Int64}                                      # Apoapses assignment indices
     apse::String                                                        # Apse type
-    counts::Matrix{Int64}                                               # Relevant apse counts
-    flags::Matrix{Int64}                                                # Event flags
+    counts::Vector{Int64}                                               # Relevant apse counts
+    flags::Vector{Int64}                                                # Event flags
     grade::String                                                       # Grade type
     JC::Float64                                                         # Jacobi constant
     periapses::Matrix{Float64}                                          # Periapses states
@@ -225,7 +225,7 @@ struct CR3BPApseMap
     primary::String                                                     # Central primary identifier
     q::Matrix{Float64}                                                  # States
 
-    function CR3BPApseMap(dynamicsModel::MBD.CR3BPDynamicsModel, primary::Int64, apse::Symbol, grade::Symbol, JC::Float64, q::Matrix{Float64}, flags::Matrix{Int64}, counts::Matrix{Int64}, periapses::Matrix{Float64}, periapsesIndices::Vector{Int64}, apoapses::Matrix{Float64}, apoapsesIndices::Vector{Int64})
+    function CR3BPApseMap(dynamicsModel::MBD.CR3BPDynamicsModel, primary::Int64, apse::Symbol, grade::Symbol, JC::Float64, q::Matrix{Float64}, flags::Vector{Int64}, counts::Vector{Int64}, periapses::Matrix{Float64}, periapsesIndices::Vector{Int64}, apoapses::Matrix{Float64}, apoapsesIndices::Vector{Int64})
         if primary == 0
             primaryName::String = "Barycenter"
         else
@@ -955,9 +955,9 @@ Export CR3BP apse map data to MAT file
 - `apse::Symbol`: Apse type
 - `grade::Symbol`: Grade type
 - `JC::Float64`: Jacobi constant
-- `qGrid::Matrix{StaticArrays.MVector{6, Float64}}`: Grid states
-- `flags::Matrix{Float64}`: Event flag indicators
-- `count::Matrix{Int64}`: Number of relevant apses before event
+- `qGrid::Vector{StaticArrays.MVector{6, Float64}}`: Grid states
+- `flags::Vector{Float64}`: Event flag indicators
+- `count::Vector{Int64}`: Number of relevant apses before event
 - `periapses::Vector{SVector{6, Float64}}`: Periapses states
 - `periapsesIndices::Vector{Int64}`: Periapses indices
 - `apoapses::Vector{SVector{6, Float64}}`: Apoapses states
@@ -965,7 +965,7 @@ Export CR3BP apse map data to MAT file
 - `file::MatFile`: MAT file
 - `name::Symbol`: Export object name
 """
-function exportCR3BPApseMap(dynamicsModel::MBD.CR3BPDynamicsModel, primary::Int64, apse::Symbol, grade::Symbol, JC::Float64, qGrid::Matrix{StaticArrays.MVector{6, Float64}}, flags::Matrix{Int64}, count::Matrix{Int64}, periapses::Vector{StaticArrays.SVector{6, Float64}}, periapsesIndices::Vector{Int64}, apoapses::Vector{StaticArrays.SVector{6, Float64}}, apoapsesIndices::Vector{Int64}, file::MATLAB.MatFile, name::Symbol)
+function exportCR3BPApseMap(dynamicsModel::MBD.CR3BPDynamicsModel, primary::Int64, apse::Symbol, grade::Symbol, JC::Float64, qGrid::Vector{StaticArrays.MVector{6, Float64}}, flags::Vector{Int64}, count::Vector{Int64}, periapses::Vector{StaticArrays.SVector{6, Float64}}, periapsesIndices::Vector{Int64}, apoapses::Vector{StaticArrays.SVector{6, Float64}}, apoapsesIndices::Vector{Int64}, file::MATLAB.MatFile, name::Symbol)
     q::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), qGrid))
     periapsesMat::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), periapses))
     apoapsesMat::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), apoapses))
