@@ -13,7 +13,6 @@ using MBD, Clustering, DifferentialEquations, Distances, HDF5, LinearAlgebra, Lo
 global_logger(ConsoleLogger(stderr, Logging.Warn)) # Debug, Info, Warn, Error
 
 include("../Utilities/Export.jl")
-include("../Utilities/Plot.jl")
 
 struct CharValues
     lstar::Float64
