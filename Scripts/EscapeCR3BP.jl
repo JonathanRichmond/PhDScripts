@@ -3,7 +3,7 @@ Script for computing CR3BP escape trajectories in the Earth-Moon system
 
 Author: Jonathan LeFevre Richmond
 C: 6/16/26
-U: 8/11/26
+U: 8/12/26
 """
 
 module EscCR3BP
@@ -56,7 +56,7 @@ end
 function endAffect!(integrator, index)
     idx = findfirst(!=(0), index)
     if idx == 1
-        if (index[idx] == 1) && (isInterior(integrator.u, getMassRatio(integrator.p[1]), integrator.p[5], integrator.p[6])) && (integrator.u[1] < 0.84)
+        if (index[idx] == 1) && (isInterior(integrator.u, getMassRatio(integrator.p[1]), integrator.p[5], integrator.p[6])) && ((integrator.p[10] != 2) ? (integrator.u[1] < 0.84) : true)
             integrator.p[2][1].count += 1
             push!(integrator.p[2][1].states, integrator.u)
         elseif index[idx] == -1
@@ -157,10 +157,9 @@ function getGrid(env::EscEnv, n::Int64, primary::Int64)
     rM::StaticArrays.SVector{2, Float64} = StaticArrays.SVector{2,Float64}(getPrimaryState(env.EMDynamicsModel, 2)[1:2])
     
     lunarMask::BitMatrix = LinearAlgebra.norm.(rRect .- Ref(rM)) .> 1.25*env.MoonHill_EM
-    interiorMask::Matrix{Bool} = isInterior.(rRect, mu, Ref(rE), Ref(rM))
-    combinedMask::Matrix{Bool} = lunarMask .& interiorMask
+    mask::Matrix{Bool} = (primary == 2) ? .~lunarMask : (lunarMask .& isInterior.(rRect, mu, Ref(rE), Ref(rM)))
 
-    rGrid::Vector{StaticArrays.SVector{2, Float64}} = rRect[combinedMask]
+    rGrid::Vector{StaticArrays.SVector{2, Float64}} = rRect[mask]
 
     return rGrid
 end
@@ -213,13 +212,13 @@ function countApses(env::EscEnv, primary::Int64, apse::Symbol, IC::AbstractVecto
     center::Vector{Float64} = (primary == 0 ? zeros(Float64, 3) : getPrimaryState(env.EMDynamicsModel, primary)[1:3])
     r_Earth::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 1)[1:3]
     r_Moon::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 2)[1:3]
-    params::Vector{Any} = [apse, center, r_Earth, r_Moon, env.EarthHill_EM, env.EarthRadius_EM, env.MoonRadius_EM]
+    params::Vector{Any} = [apse, center, r_Earth, r_Moon, env.EarthHill_EM, env.EarthRadius_EM, env.MoonRadius_EM, primary]
     (_, eventTrackers::Vector{EventTracker}) = propagateWithEvents(env.propagator, env.endEvents, Vector(IC), [0, 12.0*pi], env.EMDynamicsModel, [peri, apo, escape, crashEarth, crashMoon], params)
     
     return eventTrackers
 end
 
-function apseMapCR3BP(env::EscEnv, JC::Float64, n::Int64, primary::Int64, rGrid::Vector{StaticArrays.SVector{2, Float64}}, mf::MATLAB.MatFile; apse::Symbol = :peri, grade::Symbol = :pro)
+function apseMapCR3BP(env::EscEnv, JC::Float64, primary::Int64, rGrid::Vector{StaticArrays.SVector{2, Float64}}, mf::MATLAB.MatFile; apse::Symbol = :peri, grade::Symbol = :pro)
     qGrid::Vector{StaticArrays.MVector{6, Float64}} = computeApseStates(env, primary, JC, apse, grade, rGrid)
 
     flags::Vector{Int64} = fill(9, size(qGrid))
@@ -684,7 +683,7 @@ function run_apseMapCR3BP(JC::Float64, n::Int64, primary::Int64; apse::Symbol = 
     env::EscEnv = setupEnvironment()
 
     rGrid::Vector{StaticArrays.SVector{2, Float64}} = getGrid(env, n, primary)
-    apseMapCR3BP(env, JC, n, primary, rGrid, mf; apse = apse, grade = grade)
+    apseMapCR3BP(env, JC, primary, rGrid, mf; apse = apse, grade = grade)
     
     MATLAB.close(mf)
 end
@@ -698,7 +697,7 @@ function run_apseMapsCR3BP(JCs::Vector{Float64}, n::Int64, primary::Int64; apse:
     o::Int64 = length(JCs)
     for j::Int64 in eachindex(JCs)
         println("\nProducing map $j / $o: JC = $(JCs[j])...")
-        apseMapCR3BP(env, JCs[j], n, primary, rGrid, mf; apse = apse, grade = grade)
+        apseMapCR3BP(env, JCs[j], primary, rGrid, mf; apse = apse, grade = grade)
     end
 
     MATLAB.close(mf)
