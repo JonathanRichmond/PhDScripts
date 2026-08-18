@@ -3,7 +3,7 @@ Script for computing CR3BP escape trajectories in the Earth-Moon system
 
 Author: Jonathan LeFevre Richmond
 C: 6/16/26
-U: 8/12/26
+U: 8/18/26
 """
 
 module EscCR3BP
@@ -365,6 +365,7 @@ function optimizeForTransit(env::EscEnv, JC::Float64, q0::Vector{Float64}, volJC
     grad::Float64 = getEnergyGradient(env, q0)
     qPrev::Vector{Float64} = copy(q0)
     qNew::Vector{Float64} = copy(q0)
+    Deltav::Float64 = 0
     JCIdx::Int64 = 0
     if grad >= 0
         JCIdx = findfirst(x -> x < JC, volJCs)
@@ -374,7 +375,11 @@ function optimizeForTransit(env::EscEnv, JC::Float64, q0::Vector{Float64}, volJC
             grad = getEnergyGradient(env, qNew)
             JCIdx += 1
         end
-        (JCIdx > length(volJCs)) && throw(ErrorException("Gradient continues to increase: $idx"))
+        if JCIdx > length(volJCs)
+            Deltav = 100
+
+            return Deltav
+        end
     else
         JCIdx = findlast(x -> x > JC, volJCs)
         while (grad < 0) && (JCIdx >= 1) && (flags[JCIdx] == 0)
@@ -383,12 +388,11 @@ function optimizeForTransit(env::EscEnv, JC::Float64, q0::Vector{Float64}, volJC
             grad = getEnergyGradient(env, qNew)
             JCIdx -= 1
         end
-        (JCIdx < 1) && throw(ErrorException("Gradient continues to decrease: $idx"))
     end
     EPrev::Float64 = getEscapeEnergy(env, qPrev)
     ENew::Float64 = getEscapeEnergy(env, qNew)
     qOpt::Vector{Float64} = (EPrev > ENew) ? copy(qPrev) : copy(qNew)
-    Deltav::Float64 = sqrt(qOpt[4]^2+qOpt[5]^2)-v
+    Deltav = sqrt(qOpt[4]^2+qOpt[5]^2)-v
 
     return Deltav
 end
@@ -429,23 +433,23 @@ function escapeAnalysisCR3BP(env::EscEnv, JC::Float64, primary::Int64, flags::Ve
 
     JCRange::Vector{Float64} = (type == :flyby) ? [3.16, 2.5] : [2.5, 0.89]
     (volJCs::Vector{Float64}, volFlags::Matrix{Int64}, volqs::Array{Float64, 3}) = pruneVolumeData(JCRange, [idx], volFileName)
-    # @views vs = sqrt.(qs[4,:].^2 .+ qs[5,:].^2)
-    # Deltav2s::Vector{Float64} = fill(NaN, (length(vec(volFlags))))
-    # escEs::Vector{Float64} = copy(Deltav2s)
-    # grads::Vector{Float64} = copy(Deltav2s)
-    # escIndices::Vector{Int64} = findall(f -> f == 0, vec(volFlags))
-    # Threads.@threads for escIdx::Int64 in escIndices
-    #     q::Vector{Float64} = volqs[:,1,escIdx]
-    #     Deltav2s[escIdx] = sqrt(q[4]^2+q[5]^2)-vs[idx]
-    #     arc::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.escapeEvent, q, [0, 12.0*pi], env.EMDynamicsModel, [env.EarthHill_EM])
-    #     qf::Vector{Float64} = getStateByIndex(arc, -1)
-    #     escEs[escIdx] = getEscapeEnergy(env, qf)
-    #     grads[escIdx] = getEnergyGradient(env, q)
-    # end
+    @views vs = sqrt.(qs[4,:].^2 .+ qs[5,:].^2)
+    Deltav2s::Vector{Float64} = fill(NaN, (length(vec(volFlags))))
+    escEs::Vector{Float64} = copy(Deltav2s)
+    grads::Vector{Float64} = copy(Deltav2s)
+    escIndices::Vector{Int64} = findall(f -> f == 0, vec(volFlags))
+    Threads.@threads for escIdx::Int64 in escIndices
+        q::Vector{Float64} = volqs[:,1,escIdx]
+        Deltav2s[escIdx] = sqrt(q[4]^2+q[5]^2)-vs[idx]
+        arc::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.escapeEvent, q, [0, 12.0*pi], env.EMDynamicsModel, [env.EarthHill_EM])
+        qf::Vector{Float64} = getStateByIndex(arc, -1)
+        escEs[escIdx] = getEscapeEnergy(env, qf)
+        grads[escIdx] = getEnergyGradient(env, q)
+    end
 
-    # MATLAB.put_variable(mf, :Deltav2s, Deltav2s)
-    # MATLAB.put_variable(mf, :EscapeEs, escEs)
-    # MATLAB.put_variable(mf, :DeltaEs, grads)
+    MATLAB.put_variable(mf, :Deltav2s, Deltav2s)
+    MATLAB.put_variable(mf, :EscapeEs, escEs)
+    MATLAB.put_variable(mf, :DeltaEs, grads)
 
     """Maneuver Sequencing"""
     qTraj::Vector{Float64} = qs[:,idx]
