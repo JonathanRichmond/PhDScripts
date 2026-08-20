@@ -153,8 +153,8 @@ function getGrid(env::EscEnv, n::Int64, primary::Int64)
     rRect::Matrix{StaticArrays.SVector{2, Float64}} = [StaticArrays.SA[x, y] for x in xGrid, y in yGrid]
 
     mu::Float64 = getMassRatio(env.EMDynamicsModel)
-    rE::StaticArrays.SVector{2, Float64} = StaticArrays.SVector{2,Float64}(getPrimaryState(env.EMDynamicsModel, 1)[1:2])
-    rM::StaticArrays.SVector{2, Float64} = StaticArrays.SVector{2,Float64}(getPrimaryState(env.EMDynamicsModel, 2)[1:2])
+    rE::StaticArrays.SVector{2, Float64} = StaticArrays.SVector{2, Float64}(getPrimaryState(env.EMDynamicsModel, 1)[1:2])
+    rM::StaticArrays.SVector{2, Float64} = StaticArrays.SVector{2, Float64}(getPrimaryState(env.EMDynamicsModel, 2)[1:2])
     
     lunarMask::BitMatrix = LinearAlgebra.norm.(rRect .- Ref(rM)) .> 1.25*env.MoonHill_EM
     mask::Matrix{Bool} = (primary == 2) ? .~lunarMask : (lunarMask .& isInterior.(rRect, mu, Ref(rE), Ref(rM)))

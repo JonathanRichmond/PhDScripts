@@ -3,15 +3,15 @@ Export utility functions
 
 Author: Jonathan LeFevre Richmond
 C: 2/19/25
-U: 8/11/26
+U: 8/19/26
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, MATLAB, StaticArrays
 
 export CSVExportCR3BPFamily, exportArrays, exportBCR4BP12Manifold, exportBCR4BP12Orbit
-export exportBCR4BP12Trajectory, exportBCR4BP41Trajectory, exportCR3BPApseMap, exportCR3BPManifold
-export exportCR3BPMMAT_ext, exportCR3BPMMAT_int, exportCR3BPOrbit, exportCR3BPTrajectory
-export exportInertialTrajectory, exportPseudoManifold, fullExportCR3BPFamily
+export exportBCR4BP12Trajectory, exportBCR4BP41Trajectory, exportBCR4BPApseMap, exportCR3BPApseMap
+export exportCR3BPManifold, exportCR3BPMMAT_ext, exportCR3BPMMAT_int, exportCR3BPOrbit
+export exportCR3BPTrajectory, exportInertialTrajectory, exportPseudoManifold, fullExportCR3BPFamily
 export MATExportCR3BPOrbFamily, MATExportCR3BPTrajFamily
 
 
@@ -161,6 +161,52 @@ struct BCR4BP41Traj
 
     function BCR4BP41Traj(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta2::Vector{Float64}, t::Vector{Float64}, H::Vector{Float64}, TOF::Float64)
         this = new(H, TOF, t, theta2, x, xdot, y, ydot, z, zdot)
+
+        return this
+    end
+end
+
+"""
+    BCR4BPApseMap(dynamicsModel, primary, apse, grade, JC, thetaS, q, flags, counts, periapses, periapsesIndices, apoapses, apoapsesIndices)
+
+BCR4BP apse map export object
+
+# Arguments
+- `dynamicsModel::BCR4BP12DynamicsModel`: BCR4BP P1-P2 dynamics model object
+- `primary::Int64`: Central primary identifier
+- `apse::Symbol`: Apse type
+- `grade::Symbol`: Grade type
+- `JC::Float64`: Jacobi constant
+- `thetaS::Float64`: Sun angle [rad]
+- `q::Matrix{Float64}`: Map states [ndim]
+- `flags::Vector{Int64}`: Event flags
+- `counts::Vector{Int64}`: Number of relevant apses
+- `periapses::Matrix{Float64}`: Periapses states [ndim]
+- `periapsesIndices::Vector{Int64}`: Periapses assignment indices
+- `apoapses::Matrix{Float64}`: Apoapses states [ndim]
+- `apoapsesIndices::Vector{Int64}`: Apoapses assignment indices
+"""
+struct BCR4BPApseMap
+    apoapses::Matrix{Float64}                                           # Apoapses states
+    apoapsesIndices::Vector{Int64}                                      # Apoapses assignment indices
+    apse::String                                                        # Apse type
+    counts::Vector{Int64}                                               # Relevant apse counts
+    flags::Vector{Int64}                                                # Event flags
+    grade::String                                                       # Grade type
+    JC::Float64                                                         # Jacobi constant
+    periapses::Matrix{Float64}                                          # Periapses states
+    periapsesIndices::Vector{Int64}                                     # Periapses assignment indices
+    primary::String                                                     # Central primary identifier
+    q::Matrix{Float64}                                                  # States
+    thetaS::Float64                                                     # Sun angle
+
+    function BCR4BPApseMap(dynamicsModel::MBD.BCR4BP12DynamicsModel, primary::Int64, apse::Symbol, grade::Symbol, JC::Float64, thetaS::Float64, q::Matrix{Float64}, flags::Vector{Int64}, counts::Vector{Int64}, periapses::Matrix{Float64}, periapsesIndices::Vector{Int64}, apoapses::Matrix{Float64}, apoapsesIndices::Vector{Int64})
+        if primary == 0
+            primaryName::String = "Barycenter"
+        else
+            primaryName = dynamicsModel.systemData.primaryNames[primary]
+        end
+        this = new(apoapses, apoapsesIndices, String(apse), counts, flags, String(grade), JC, periapses, periapsesIndices, primaryName, q, thetaS)
 
         return this
     end
@@ -942,6 +988,36 @@ Export BCR4BP P4-B1 trajectory data to MAT file
 function exportBCR4BP41Trajectory(x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, xdot::Vector{Float64}, ydot::Vector{Float64}, zdot::Vector{Float64}, theta2::Vector{Float64}, t::Vector{Float64}, H::Vector{Float64}, TOF::Float64, file::MATLAB.MatFile, name::Symbol)
     traj = BCR4BP41Traj(x, y, z, xdot, ydot, zdot, theta2, t, H, TOF)
     MATLAB.put_variable(file, name, traj)
+end
+
+"""
+    exportBCR4BPApseMap(dynamicsModel, primary, apse, grade, JC, thetaS, qGrid, flags, count, periapses, periapsesIndices, apoapses, apoapsesIndices, file, name)
+
+Export BCR4BP apse map data to MAT file
+
+# Arguments
+- `dynamicsModel::MBD.BCR4BP12DynamicsModel`: BCR4BP P1-P2 dynamics model object
+- `primary::Int64`: Central primary identifier
+- `apse::Symbol`: Apse type
+- `grade::Symbol`: Grade type
+- `JC::Float64`: Jacobi constant
+- `thetaS::Float64`: Sun angle
+- `qGrid::Vector{StaticArrays.MVector{7, Float64}}`: Grid states
+- `flags::Vector{Float64}`: Event flag indicators
+- `count::Vector{Int64}`: Number of relevant apses before event
+- `periapses::Vector{SVector{7, Float64}}`: Periapses states
+- `periapsesIndices::Vector{Int64}`: Periapses indices
+- `apoapses::Vector{SVector{7, Float64}}`: Apoapses states
+- `apoapsesIndices::Vector{Int64}`: Apoapses indices
+- `file::MatFile`: MAT file
+- `name::Symbol`: Export object name
+"""
+function exportBCR4BPApseMap(dynamicsModel::MBD.BCR4BP12DynamicsModel, primary::Int64, apse::Symbol, grade::Symbol, JC::Float64, thetaS::Float64, qGrid::Vector{StaticArrays.MVector{7, Float64}}, flags::Vector{Int64}, count::Vector{Int64}, periapses::Vector{StaticArrays.SVector{7, Float64}}, periapsesIndices::Vector{Int64}, apoapses::Vector{StaticArrays.SVector{7, Float64}}, apoapsesIndices::Vector{Int64}, file::MATLAB.MatFile, name::Symbol)
+    q::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), qGrid))
+    periapsesMat::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), periapses))
+    apoapsesMat::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), apoapses))
+    apseMap = BCR4BPApseMap(dynamicsModel, primary, apse, grade, JC, thetaS, q, flags, count, periapsesMat, periapsesIndices, apoapsesMat, apoapsesIndices)
+    MATLAB.put_variable(file, name, apseMap)
 end
 
 """
