@@ -3,7 +3,7 @@ Script for computing BCR4BP escape trajectories in the Earth-Moon system
 
 Author: Jonathan LeFevre Richmond
 C: 8/12/26
-U: 8/20/26
+U: 8/22/26
 """
 
 module EscBCR4BP
@@ -225,7 +225,7 @@ function apseMapBCR4BP(env::EscEnv, JC::Float64, thetaS::Float64, primary::Int64
     periIndices::Vector{Int64} = reduce(vcat, [fill(idx, length(periapses[idx])) for idx in validPeri])
     apoStates::Vector{StaticArrays.SVector{7, Float64}} = reduce(vcat, apoapses[validApo])
     apoIndices::Vector{Int64} = reduce(vcat, [fill(idx, length(apoapses[idx])) for idx in validApo])
-    exportBCR4BPApseMap(env.EMSDynamicsModel, primary, apse, grade, JC, thetaS, qGrid, flags, counts, periStates, periIndices, apoStates, apoIndices, mf, Symbol("map_", replace(string(JC), "." => "_")))
+    exportBCR4BPApseMap(env.EMSDynamicsModel, primary, apse, grade, JC, thetaS, qGrid, flags, counts, periStates, periIndices, apoStates, apoIndices, mf, Symbol("map_", replace(string(JC), "." => "_"), "_", replace(string(round(thetaS*180.0/pi, digits = 1)), "." => "_")))
 end
 
 function run_apseMapBCR4BP(JC::Float64, thetaS::Float64, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro)
