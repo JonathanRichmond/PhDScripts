@@ -3,7 +3,7 @@ Script for computing BCR4BP escape trajectories in the Earth-Moon system
 
 Author: Jonathan LeFevre Richmond
 C: 8/12/26
-U: 8/22/26
+U: 8/26/26
 """
 
 module EscBCR4BP
@@ -43,16 +43,19 @@ end
 function endAffect!(integrator, index)
     idx = findfirst(!=(0), index)
     if idx == 1
-        if (index[idx] == 1) && (isInterior(integrator.u, get12MassRatio(integrator.p[1]), integrator.p[5], integrator.p[6])) && ((integrator.p[10] != 2) ? (integrator.u[1] < 0.84) : true)
+        if (index[idx] == 1)
             integrator.p[2][1].count += 1
-            push!(integrator.p[2][1].states, integrator.u)
+            push!(integrator.p[2][1].states, copy(integrator.u))
+            push!(integrator.p[2][1].times, copy(integrator.t))
         elseif index[idx] == -1
             integrator.p[2][2].count += 1
-            push!(integrator.p[2][2].states, integrator.u)
+            push!(integrator.p[2][2].states, copy(integrator.u))
+            push!(integrator.p[2][2].times, copy(integrator.t))
         end
     else
         integrator.p[2][idx+1].count += 1
-        push!(integrator.p[2][idx+1].states, integrator.u)
+        push!(integrator.p[2][idx+1].states, copy(integrator.u))
+        push!(integrator.p[2][idx+1].times, copy(integrator.t))
         DifferentialEquations.terminate!(integrator)
     end
 end
@@ -106,10 +109,10 @@ end
 
 function getGrid(env::EscEnv, n::Int64, primary::Int64)
     if primary == 2
-        radius::Float64 = 0.3
+        radius::Float64 = 0.2
         center::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, primary)[1:2]
     else
-        radius = 1.25
+        radius = 1.0
         center = [0.0, 0.0]
     end
 
@@ -121,7 +124,7 @@ function getGrid(env::EscEnv, n::Int64, primary::Int64)
     rE::StaticArrays.SVector{2, Float64} = StaticArrays.SVector{2, Float64}(getPrimaryState(env.EMDynamicsModel, 1)[1:2])
     rM::StaticArrays.SVector{2, Float64} = StaticArrays.SVector{2, Float64}(getPrimaryState(env.EMDynamicsModel, 2)[1:2])
     
-    lunarMask::BitMatrix = LinearAlgebra.norm.(rRect .- Ref(rM)) .> 1.25*env.MoonHill_EM
+    lunarMask::BitMatrix = LinearAlgebra.norm.(rRect .- Ref(rM)) .> env.MoonHill_EM
     mask::Matrix{Bool} = (primary == 2) ? .~lunarMask : (lunarMask .& isInterior.(rRect, mu, Ref(rE), Ref(rM)))
 
     rGrid::Vector{StaticArrays.SVector{2, Float64}} = rRect[mask]
@@ -129,13 +132,18 @@ function getGrid(env::EscEnv, n::Int64, primary::Int64)
     return rGrid
 end
 
-function isPeriapsis(dynamicsModel::MBD.CR3BPDynamicsModel, primary::Int64, r::StaticArrays.SVector{2, Float64}, dMag::Float64, v::Vector{Float64})
-    mu::Float64 = (primary == 0 ? (dynamicsModel.systemData.primaryData[1].gravParam+dynamicsModel.systemData.primaryData[2].gravParam) : dynamicsModel.systemData.primaryData[primary].gravParam)
-    vInert::StaticArrays.SVector{2, Float64} = StaticArrays.SA[v[1]-r[2], v[2]+r[1]]
-    vInertMag::Float64 = LinearAlgebra.norm(vInert)
-    vCirc::Float64 = sqrt(mu/(dMag*getCharLength(dynamicsModel)))*getCharTime(dynamicsModel)/getCharLength(dynamicsModel)
+function isPeriapsis(env::EscEnv, primary::Int64, r::AbstractVector{Float64}, v::Vector{Float64})
+    center::Vector{Float64} = (primary == 0 ? [0.0, 0.0] : getPrimaryState(env.EMDynamicsModel, primary)[1:2])
+    d::Vector{Float64} = r-center
+    mu::Float64 = getMassRatio(env.EMDynamicsModel)
+    r1::Float64 = LinearAlgebra.norm(r-getPrimaryState(env.EMDynamicsModel, 1)[1:2])
+    r2::Float64 = LinearAlgebra.norm(r-getPrimaryState(env.EMDynamicsModel, 2)[1:2])
+    dOmegadx::Float64 = r[1]-(1-mu)*(r[1]+mu)/r1^3-mu*(r[1]-1+mu)/r2^3
+    dOmegady::Float64 = r[2]-(1-mu)*r[2]/r1^3-mu*r[2]/r2^3
+    xddot::Float64 = 2*v[2]+dOmegadx
+    yddot::Float64 = -2*v[1]+dOmegady
 
-    return vInertMag > vCirc
+    return v[1]^2+v[2]^2+LinearAlgebra.dot(d, [xddot, yddot]) > 0
 end
 
 function computeApseVelocities(env::EscEnv, JC::Float64, rGrid::Vector{StaticArrays.SVector{2, Float64}})
@@ -156,7 +164,7 @@ function computeApseStates(env::EscEnv, primary::Int64, JC::Float64, thetaS::Flo
     Threads.@threads for j::Int64 in eachindex(qGrid)
         isnan(vMagGrid[j]) && continue
         v::Vector{Float64} = gradeSign*vMagGrid[j] .* thatGrid[j]
-        peri::Bool = isPeriapsis(env.EMDynamicsModel, primary, rGrid[j], dMagGrid[j], v)
+        peri::Bool = isPeriapsis(env, primary, rGrid[j], v)
         if ((apse == :peri) && !peri) || ((apse == :apo) && peri)
             qGrid[j][4] = Inf; qGrid[j][5] = Inf; qGrid[j][6] = Inf
             continue
@@ -169,11 +177,11 @@ function computeApseStates(env::EscEnv, primary::Int64, JC::Float64, thetaS::Flo
 end
 
 function countApses(env::EscEnv, primary::Int64, apse::Symbol, IC::AbstractVector{Float64})
-    peri = MBD.EventTracker(0, :peri, [])
-    apo = MBD.EventTracker(0, :apo, [])
-    escape = MBD.EventTracker(0, :escape, [])
-    crashEarth = MBD.EventTracker(0, :earth, [])
-    crashMoon = MBD.EventTracker(0, :moon, [])
+    peri = MBD.EventTracker(0, :peri, [], [])
+    apo = MBD.EventTracker(0, :apo, [], [])
+    escape = MBD.EventTracker(0, :escape, [], [])
+    crashEarth = MBD.EventTracker(0, :earth, [], [])
+    crashMoon = MBD.EventTracker(0, :moon, [], [])
     center::Vector{Float64} = (primary == 0 ? zeros(Float64, 3) : getPrimaryState(env.EMDynamicsModel, primary)[1:3])
     r_Earth::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 1)[1:3]
     r_Moon::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 2)[1:3]

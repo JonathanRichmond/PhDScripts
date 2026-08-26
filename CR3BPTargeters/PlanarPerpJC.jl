@@ -3,10 +3,10 @@ Jacobi constant perpendicular crossing targeter for CR3BP planar orbits
 
 Author: Jonathan LeFevre Richmond
 C: 2/4/25
-U: 7/7/25
+U: 8/25/26
 """
 
-using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, StaticArrays
+using MBD, CSV, DataFrames, DiffEqCallbacks, DifferentialEquations, LinearAlgebra, StaticArrays
 
 export PlanarPerpJCTargeter
 export correct, getIndividualPeriodicOrbit, getMonodromy, getPeriod, interpOrbit, propagateState
@@ -105,7 +105,7 @@ function getMonodromy(targeter::PlanarPerpJCTargeter, solution::MBD.CR3BPMultipl
     propagator = MBD.Propagator(equationType = MBD.STM)
     n_simple::Int64 = getStateSize(targeter.dynamicsModel, MBD.SIMPLE)
     n_STM::Int64 = getStateSize(targeter.dynamicsModel, MBD.STM)
-    renormalizeEvent::DifferentialEquations.DiscreteCallback = DifferentialEquations.PeriodicCallback(MBD.renormalize!, pi/10)
+    renormalizeEvent::DifferentialEquations.DiscreteCallback = DiffEqCallbacks.PeriodicCallback(MBD.renormalize!, pi/10)
     Rs::Vector{Matrix{Float64}} = []
     halfOrbit::MBD.CR3BPArc = propagateWithPeriodicEvent(propagator, renormalizeEvent, appendExtraInitialConditions(targeter.dynamicsModel, solution.nodes[1].state.data, MBD.STM), [0, solution.segments[1].TOF.data[1]], targeter.dynamicsModel, [targeter.dynamicsModel, Rs])
     PCState::StaticArrays.SVector{n_STM, Float64} = StaticArrays.SVector{n_STM, Float64}(getStateByIndex(halfOrbit, -1))

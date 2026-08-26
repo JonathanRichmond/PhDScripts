@@ -2,6 +2,7 @@
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Clustering = "aaaa29a8-35af-508c-8bc3-b662a17a0fe5"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DiffEqCallbacks = "459566f4-90b8-5000-8ac3-15dfb0a30def"
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
 Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
