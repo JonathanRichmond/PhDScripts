@@ -156,7 +156,6 @@ end
 function computeApseStates(env::EscEnv, primary::Int64, JC::Float64, thetaS::Float64, apse::Symbol, grade::Symbol, rGrid::Vector{StaticArrays.SVector{2, Float64}})
     center::StaticArrays.SVector{2, Float64} = (primary == 0 ? StaticArrays.SA[0.0, 0.0] : StaticArrays.SVector{2, Float64}(getPrimaryState(env.EMDynamicsModel, primary)[1:2]))
     dGrid::Vector{StaticArrays.SVector{2, Float64}} = rGrid .- Ref(center)
-    dMagGrid::Vector{Float64} = LinearAlgebra.norm.(dGrid)
     thatGrid::Vector{StaticArrays.SVector{2, Float64}} = map(r -> StaticArrays.SA[-r[2], r[1]] ./ norm(r), dGrid)
     vMagGrid::Vector{Float64} = computeApseVelocities(env, JC, rGrid)
     qGrid::Vector{StaticArrays.MVector{7, Float64}} = map(r -> StaticArrays.MVector{7, Float64}([r[1], r[2], 0.0, NaN, NaN, NaN, thetaS]), rGrid)

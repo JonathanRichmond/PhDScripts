@@ -3,7 +3,7 @@ Export utility functions
 
 Author: Jonathan LeFevre Richmond
 C: 2/19/25
-U: 8/19/26
+U: 9/4/26
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, MATLAB, StaticArrays
@@ -1043,8 +1043,10 @@ Export CR3BP apse map data to MAT file
 """
 function exportCR3BPApseMap(dynamicsModel::MBD.CR3BPDynamicsModel, primary::Int64, apse::Symbol, grade::Symbol, JC::Float64, qGrid::Vector{StaticArrays.MVector{6, Float64}}, flags::Vector{Int64}, count::Vector{Int64}, periapses::Vector{StaticArrays.SVector{6, Float64}}, periapsesIndices::Vector{Int64}, apoapses::Vector{StaticArrays.SVector{6, Float64}}, apoapsesIndices::Vector{Int64}, file::MATLAB.MatFile, name::Symbol)
     q::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), qGrid))
-    periapsesMat::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), periapses))
-    apoapsesMat::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), apoapses))
+    periapsesMat::Matrix{Float64} = Matrix{Float64}(reinterpret(reshape, Float64, periapses))
+    apoapsesMat::Matrix{Float64} = Matrix{Float64}(reinterpret(reshape, Float64, apoapses))
+    # periapsesMat::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), periapses))
+    # apoapsesMat::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), apoapses))
     apseMap = CR3BPApseMap(dynamicsModel, primary, apse, grade, JC, q, flags, count, periapsesMat, periapsesIndices, apoapsesMat, apoapsesIndices)
     MATLAB.put_variable(file, name, apseMap)
 end
