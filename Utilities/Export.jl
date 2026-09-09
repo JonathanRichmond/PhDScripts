@@ -1045,8 +1045,6 @@ function exportCR3BPApseMap(dynamicsModel::MBD.CR3BPDynamicsModel, primary::Int6
     q::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), qGrid))
     periapsesMat::Matrix{Float64} = Matrix{Float64}(reinterpret(reshape, Float64, periapses))
     apoapsesMat::Matrix{Float64} = Matrix{Float64}(reinterpret(reshape, Float64, apoapses))
-    # periapsesMat::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), periapses))
-    # apoapsesMat::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), apoapses))
     apseMap = CR3BPApseMap(dynamicsModel, primary, apse, grade, JC, q, flags, count, periapsesMat, periapsesIndices, apoapsesMat, apoapsesIndices)
     MATLAB.put_variable(file, name, apseMap)
 end

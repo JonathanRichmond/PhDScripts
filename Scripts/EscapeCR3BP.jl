@@ -3,7 +3,7 @@ Script for computing CR3BP escape trajectories in the Earth-Moon system
 
 Author: Jonathan LeFevre Richmond
 C: 6/16/26
-U: 9/4/26
+U: 9/9/26
 """
 
 module EscCR3BP
@@ -66,12 +66,16 @@ function endAffect!(integrator, index)
     if idx == 1
         if (index[idx] == 1)
             integrator.p[2][1].count += 1
-            push!(integrator.p[2][1].states, copy(integrator.u))
-            push!(integrator.p[2][1].times, copy(integrator.t))
+            if integrator.p[10]
+                push!(integrator.p[2][1].states, copy(integrator.u))
+                push!(integrator.p[2][1].times, copy(integrator.t))
+            end
         elseif index[idx] == -1
             integrator.p[2][2].count += 1
-            push!(integrator.p[2][2].states, copy(integrator.u))
-            push!(integrator.p[2][2].times, copy(integrator.t))
+            if integrator.p[10]
+                push!(integrator.p[2][2].states, copy(integrator.u))
+                push!(integrator.p[2][2].times, copy(integrator.t))
+            end
         end
     else
         integrator.p[2][idx+1].count += 1
@@ -219,7 +223,7 @@ function computeApseStates(env::EscEnv, primary::Int64, JC::Float64, apse::Symbo
     return qGrid
 end
 
-function countApses(env::EscEnv, primary::Int64, apse::Symbol, IC::AbstractVector{Float64})
+function countApses(env::EscEnv, primary::Int64, apse::Symbol, IC::AbstractVector{Float64}, apses::Bool)
     peri = MBD.EventTracker(0, :peri, [], [])
     apo = MBD.EventTracker(0, :apo, [], [])
     escape = MBD.EventTracker(0, :escape, [], [])
@@ -228,13 +232,13 @@ function countApses(env::EscEnv, primary::Int64, apse::Symbol, IC::AbstractVecto
     center::Vector{Float64} = (primary == 0 ? zeros(Float64, 3) : getPrimaryState(env.EMDynamicsModel, primary)[1:3])
     r_Earth::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 1)[1:3]
     r_Moon::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 2)[1:3]
-    params::Vector{Any} = [apse, center, r_Earth, r_Moon, env.EarthHill_EM, env.EarthRadius_EM, env.MoonRadius_EM, primary]
+    params::Vector{Any} = [apse, center, r_Earth, r_Moon, env.EarthHill_EM, env.EarthRadius_EM, env.MoonRadius_EM, apses]
     (_, eventTrackers::Vector{EventTracker}) = propagateWithEvents(env.propagator, env.endEvents, Vector(IC), [0, 12.0*pi], env.EMDynamicsModel, [peri, apo, escape, crashEarth, crashMoon], params)
     
     return eventTrackers
 end
 
-function apseMapCR3BP(env::EscEnv, JC::Float64, primary::Int64, rGrid::Vector{StaticArrays.SVector{2, Float64}}, mf::MATLAB.MatFile; apse::Symbol = :peri, grade::Symbol = :pro)
+function apseMapCR3BP(env::EscEnv, JC::Float64, primary::Int64, rGrid::Vector{StaticArrays.SVector{2, Float64}}, mf::MATLAB.MatFile; apse::Symbol = :peri, grade::Symbol = :pro, apses::Bool = true)
     qGrid::Vector{StaticArrays.MVector{6, Float64}} = computeApseStates(env, primary, JC, apse, grade, rGrid)
 
     flags::Vector{Int64} = fill(9, size(qGrid))
@@ -247,7 +251,7 @@ function apseMapCR3BP(env::EscEnv, JC::Float64, primary::Int64, rGrid::Vector{St
     apoapses::Vector{Vector{StaticArrays.SVector{6, Float64}}} = [StaticArrays.SVector{6, Float64}[] for _ in qGrid]
     println("Propagating $(length(qProp)) CR3BP trajectories with $(Threads.nthreads()) threads...")
     Threads.@threads for j in eachindex(qProp)
-        eventTrackers::Vector{MBD.EventTracker} = countApses(env, primary, apse, qProp[j])
+        eventTrackers::Vector{MBD.EventTracker} = countApses(env, primary, apse, qProp[j], apses)
         apsesCount::Int64 = (apse == :peri ? eventTrackers[1].count : eventTrackers[2].count)
         if (eventTrackers[4].count != 0) || (eventTrackers[5].count != 0)
             flags[qMap[j]] = 7
@@ -257,8 +261,10 @@ function apseMapCR3BP(env::EscEnv, JC::Float64, primary::Int64, rGrid::Vector{St
             flags[qMap[j]] = 6
         end
         counts[qMap[j]] = apsesCount
-        periapses[qMap[j]] = map(q -> StaticArrays.SVector{6, Float64}(q), eventTrackers[1].states)
-        apoapses[qMap[j]] = map(q -> StaticArrays.SVector{6, Float64}(q), eventTrackers[2].states)
+        if apses
+            periapses[qMap[j]] = map(q -> StaticArrays.SVector{6, Float64}(q), eventTrackers[1].states)
+            apoapses[qMap[j]] = map(q -> StaticArrays.SVector{6, Float64}(q), eventTrackers[2].states)
+        end
     end
 
     flagCounts::Vector{Int64} = [count(==(f), flags) for f in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]]
@@ -269,18 +275,19 @@ function apseMapCR3BP(env::EscEnv, JC::Float64, primary::Int64, rGrid::Vector{St
     println("\tInvalid apses:\t$(flagCounts[9])")
     println("\tZVCs:\t\t$(flagCounts[10])")
 
-    println("Exporting map...")
-    validPeri::Vector{Int64} = findall(!isempty, periapses)
-    validApo::Vector{Int64} = findall(!isempty, apoapses)
-    periStates::Vector{StaticArrays.SVector{6, Float64}} = [StaticArrays.SVector{6, Float64}(state) for idx in validPeri for state in periapses[idx]]
-    periIndices::Vector{Int64} = [idx for idx in validPeri for _ in 1:length(periapses[idx])]
-    apoStates::Vector{StaticArrays.SVector{6, Float64}} = [StaticArrays.SVector{6, Float64}(state) for idx in validApo for state in apoapses[idx]]
-    apoIndices::Vector{Int64} = [idx for idx in validApo for _ in 1:length(apoapses[idx])]
-    # periStates::Vector{StaticArrays.SVector{6, Float64}} = reduce(vcat, periapses[validPeri])
-    # periIndices::Vector{Int64} = reduce(vcat, [fill(idx, length(periapses[idx])) for idx in validPeri])
-    # apoStates::Vector{StaticArrays.SVector{6, Float64}} = reduce(vcat, apoapses[validApo])
-    # apoIndices::Vector{Int64} = reduce(vcat, [fill(idx, length(apoapses[idx])) for idx in validApo])
-    exportCR3BPApseMap(env.EMDynamicsModel, primary, apse, grade, JC, qGrid, flags, counts, periStates, periIndices, apoStates, apoIndices, mf, Symbol("map_", replace(string(JC), "." => "_")))
+    if apses
+        println("Exporting map with apses...")
+        validPeri::Vector{Int64} = findall(!isempty, periapses)
+        validApo::Vector{Int64} = findall(!isempty, apoapses)
+        periStates::Vector{StaticArrays.SVector{6, Float64}} = [StaticArrays.SVector{6, Float64}(state) for idx in validPeri for state in periapses[idx]]
+        periIndices::Vector{Int64} = [idx for idx in validPeri for _ in 1:length(periapses[idx])]
+        apoStates::Vector{StaticArrays.SVector{6, Float64}} = [StaticArrays.SVector{6, Float64}(state) for idx in validApo for state in apoapses[idx]]
+        apoIndices::Vector{Int64} = [idx for idx in validApo for _ in 1:length(apoapses[idx])]
+        exportCR3BPApseMap(env.EMDynamicsModel, primary, apse, grade, JC, qGrid, flags, counts, periStates, periIndices, apoStates, apoIndices, mf, Symbol("map_", replace(string(JC), "." => "_")))
+    else
+        println("Exporting map without apses...")
+        exportCR3BPApseMap(env.EMDynamicsModel, primary, apse, grade, JC, qGrid, flags, counts, Vector{StaticArrays.SVector{6, Float64}}(), Vector{Int64}(), Vector{StaticArrays.SVector{6, Float64}}(), Vector{Int64}(), mf, Symbol("map_", replace(string(JC), "." => "_")))
+    end
 end
 
 function pruneVolumeData(JCRange::Vector{Float64}, indices::Vector{Int64}, volFileName::String)
@@ -350,26 +357,44 @@ function getEnergyGradient(env::EscEnv, q0::Vector{Float64})
     return only(dEdQI*dQIdqI*dqIdqR*(dqRdq0*dq0dv0+dqRdtau*dtaudv0)*dv0dalpha)
 end
 
-function getEnergyGradientFull(env::EscEnv, q0::Vector{Float64})
-    mu::Float64 = env.primaries[1].gravParam
-    arc::MBD.CR3BPArc = propagateWithEvent(env.propagator_STM, env.escapeEvent, appendExtraInitialConditions(env.EMDynamicsModel, q0, MBD.STM), [0, 12.0*pi], env.EMDynamicsModel, [env.EarthHill_EM])
-    qf::Vector{Float64} = getStateByIndex(arc, -1)
-    qf_I::Vector{Float64} = rotatingToPrimaryInertial(env.EMDynamicsModel, 1, [qf[1:6]], [0.0])[1]
-    Qf_I::Vector{Float64} = append!(qf_I[1:3].*env.charValues.EM.lstar, qf_I[4:6].*env.charValues.EM.lstar./env.charValues.EM.tstar)
-    dEdQI::Matrix{Float64} = [mu*Qf_I[1:3]'./LinearAlgebra.norm(Qf_I[1:3])^3 Qf_I[4:6]';]
-    lstar::Float64 = env.charValues.EM.lstar
-    tstar::Float64 = env.charValues.EM.tstar
-    dQIdqI::Matrix{Float64} = lstar.*LinearAlgebra.diagm([1.0, 1.0, 1.0, 1.0/tstar, 1.0/tstar, 1.0/tstar])
-    dqIdqR::Matrix{Float64} = [LinearAlgebra.I zeros(Float64, (3,3)); [0 -1.0 0; 1.0 0 0; 0 0 0] LinearAlgebra.I]
-    dqRdq0::Matrix{Float64} = getStateTransitionMatrix(env.EMDynamicsModel, qf)
-    qfdot::Vector{Float64} = zeros(Float64, 6)
-    computeDerivatives!(qfdot, qf[1:6], (env.EMEoMs,), 0.0)
-    dqRdtau::Matrix{Float64} = reshape(qfdot, (6,1))
-    dgdqR::Matrix{Float64} = [Qf_I[1:3]'./LinearAlgebra.norm(Qf_I[1:3]) zeros(Float64, (1,3))]
-    dtaudq0::Matrix{Float64} = -dgdqR*dqRdq0./(dgdqR*dqRdtau)
+# function getEnergyGradientFull(env::EscEnv, q0::Vector{Float64})
+#     mu::Float64 = env.primaries[1].gravParam
+#     arc::MBD.CR3BPArc = propagateWithEvent(env.propagator_STM, env.escapeEvent, appendExtraInitialConditions(env.EMDynamicsModel, q0, MBD.STM), [0, 12.0*pi], env.EMDynamicsModel, [env.EarthHill_EM])
+#     qf::Vector{Float64} = getStateByIndex(arc, -1)
+#     qf_I::Vector{Float64} = rotatingToPrimaryInertial(env.EMDynamicsModel, 1, [qf[1:6]], [0.0])[1]
+#     Qf_I::Vector{Float64} = append!(qf_I[1:3].*env.charValues.EM.lstar, qf_I[4:6].*env.charValues.EM.lstar./env.charValues.EM.tstar)
+#     dEdQI::Matrix{Float64} = [mu*Qf_I[1:3]'./LinearAlgebra.norm(Qf_I[1:3])^3 Qf_I[4:6]';]
+#     lstar::Float64 = env.charValues.EM.lstar
+#     tstar::Float64 = env.charValues.EM.tstar
+#     dQIdqI::Matrix{Float64} = lstar.*LinearAlgebra.diagm([1.0, 1.0, 1.0, 1.0/tstar, 1.0/tstar, 1.0/tstar])
+#     dqIdqR::Matrix{Float64} = [LinearAlgebra.I zeros(Float64, (3,3)); [0 -1.0 0; 1.0 0 0; 0 0 0] LinearAlgebra.I]
+#     dqRdq0::Matrix{Float64} = getStateTransitionMatrix(env.EMDynamicsModel, qf)
+#     qfdot::Vector{Float64} = zeros(Float64, 6)
+#     computeDerivatives!(qfdot, qf[1:6], (env.EMEoMs,), 0.0)
+#     dqRdtau::Matrix{Float64} = reshape(qfdot, (6,1))
+#     dgdqR::Matrix{Float64} = [Qf_I[1:3]'./LinearAlgebra.norm(Qf_I[1:3]) zeros(Float64, (1,3))]
+#     dtaudq0::Matrix{Float64} = -dgdqR*dqRdq0./(dgdqR*dqRdtau)
 
-    return dEdQI*dQIdqI*dqIdqR*(dqRdq0+dqRdtau*dtaudq0)
-end
+#     return dEdQI*dQIdqI*dqIdqR*(dqRdq0+dqRdtau*dtaudq0)
+# end
+
+# function getEnergyGradientApo(env::EscEnv, primary::Int64, q0::Vector{Float64})
+#     center::Vector{Float64} = (primary == 0 ? zeros(Float64, 3) : getPrimaryState(env.EMDynamicsModel, primary)[1:3])
+#     periArc::MBD.CR3BPArc = propagateWithEvent(env.propagator_STM, env.periapsisEvent, appendExtraInitialConditions(env.EMDynamicsModel, q0, MBD.STM), [0, 4*pi], env.EMDynamicsModel, [center, primary])
+#     qPeri::Vector{Float64} = getStateByIndex(periArc, -1)
+#     grad2::Matrix{Float64} = getEnergyGradientFull(env, qPeri[1:6])
+#     dqPeridq0::Matrix{Float64} = getStateTransitionMatrix(env.EMDynamicsModel, qPeri)
+#     dq0dv0::Matrix{Float64} = [zeros(Float64, (3,3)); LinearAlgebra.I]
+#     qPeridot::Vector{Float64} = zeros(Float64, 6)
+#     computeDerivatives!(qPeridot, qPeri[1:6], (env.EMEoMs,), 0.0)
+#     dqPeridtau::Matrix{Float64} = reshape(qPeridot, (6,1))
+#     dgdqPeri::Matrix{Float64} = [qPeri[4:6]' qPeri[1:3]';]
+#     dtaudv0::Matrix{Float64} = -dgdqPeri*dqPeridq0*dq0dv0./(dgdqPeri*dqPeridtau)
+#     dv0dalpha::Matrix{Float64} = reshape(q0[4:6], (3,1))./LinearAlgebra.norm(q0[4:6])
+#     dqPeridalpha::Matrix{Float64} = (dqPeridq0*dq0dv0+dqPeridtau*dtaudv0)*dv0dalpha
+
+#     return only(grad2*dqPeridalpha)
+# end
 
 function getPeriluneDistance(env::EscEnv, q0::Vector{Float64})
     arc::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.flybyEvent, q0, [0, 3.0*pi], env.EMDynamicsModel, [1.2])
@@ -441,26 +466,6 @@ function optimizeForTransit(env::EscEnv, JC::Float64, q0::Vector{Float64}, volJC
     JCNew = getJacobiConstant(env.EMDynamicsModel, qOpt)
 
     return (Deltav, JCNew)
-end
-
-function apoapsisTest(env::EscEnv, primary::Int64, q0::Vector{Float64})
-    center::Vector{Float64} = (primary == 0 ? zeros(Float64, 3) : getPrimaryState(env.EMDynamicsModel, primary)[1:3])
-    periArc::MBD.CR3BPArc = propagateWithEvent(env.propagator_STM, env.periapsisEvent, appendExtraInitialConditions(env.EMDynamicsModel, q0, MBD.STM), [0, 4*pi], env.EMDynamicsModel, [center, primary])
-    qPeri::Vector{Float64} = getStateByIndex(periArc, -1)
-    eta1::Float64 = getEnergyGradient(env, qPeri[1:6])
-    grad2::Matrix{Float64} = getEnergyGradientFull(env, qPeri[1:6])
-    dqPeridq0::Matrix{Float64} = getStateTransitionMatrix(env.EMDynamicsModel, qPeri)
-    dq0dv0::Matrix{Float64} = [zeros(Float64, (3,3)); LinearAlgebra.I]
-    qPeridot::Vector{Float64} = zeros(Float64, 6)
-    computeDerivatives!(qPeridot, qPeri[1:6], (env.EMEoMs,), 0.0)
-    dqPeridtau::Matrix{Float64} = reshape(qPeridot, (6,1))
-    dgdqPeri::Matrix{Float64} = [qPeri[4:6]' qPeri[1:3]';]
-    dtaudv0::Matrix{Float64} = -dgdqPeri*dqPeridq0*dq0dv0./(dgdqPeri*dqPeridtau)
-    dv0dalpha::Matrix{Float64} = reshape(q0[4:6], (3,1))./LinearAlgebra.norm(q0[4:6])
-    dqPeridalpha::Matrix{Float64} = (dqPeridq0*dq0dv0+dqPeridtau*dtaudv0)*dv0dalpha
-    eta2::Float64 = only(grad2*dqPeridalpha)
-
-    return eta2 > eta1
 end
 
 function feasibleEscape(JC::Float64, q0::Vector{Float64}, volJCs::Vector{Float64}, flags::Vector{Int64}, qs::Matrix{Float64})
@@ -577,7 +582,7 @@ function trajFeasibleEscape(env::EscEnv, JC::Float64, primary::Int64, q::Vector{
     return (Deltav, JCNew)
 end
 
-function escapeAnalysisCR3BP(env::EscEnv, JC::Float64, primary::Int64, flags::Vector{Int64}, qs::Matrix{Float64}, flagsApo::Vector{Int64}, qsApo::Matrix{Float64}, apoapses::Matrix{Float64}, apoapsesIndices::Vector{Int64}, periapses::Matrix{Float64}, periapsesIndices::Vector{Int64}, volFileName::String, apoVolFileName::String, idx::Int64, mf::MATLAB.MatFile)
+function escapeAnalysisCR3BP(env::EscEnv, JC::Float64, apse::Symbol, flags::Vector{Int64}, qs::Matrix{Float64}, periapses::Matrix{Float64}, periapsesIndices::Vector{Int64}, volFileName::String, idx::Int64, mf::MATLAB.MatFile)
     esc0Indices::Vector{Int64} =  findall(flags .== 0)
     n_esc0::Int64 = length(esc0Indices)
     esc0q_0s::Matrix{Float64} = qs[:,esc0Indices]
@@ -613,23 +618,24 @@ function escapeAnalysisCR3BP(env::EscEnv, JC::Float64, primary::Int64, flags::Ve
 
     JCRange::Vector{Float64} = [3.18, 2.8]
     (volJCs::Vector{Float64}, volFlags::Matrix{Int64}, volqs::Array{Float64, 3}) = pruneVolumeData(JCRange, [idx], volFileName)
-    @views vs = sqrt.(qs[4,:].^2 .+ qs[5,:].^2)
-    Deltav2s::Vector{Float64} = fill(NaN, (length(vec(volFlags))))
-    escEs::Vector{Float64} = copy(Deltav2s)
-    grads::Vector{Float64} = copy(Deltav2s)
-    escIndices::Vector{Int64} = findall(f -> f == 0, vec(volFlags))
-    Threads.@threads for escIdx::Int64 in escIndices
-        q::Vector{Float64} = volqs[:,1,escIdx]
-        Deltav2s[escIdx] = sqrt(q[4]^2+q[5]^2)-vs[idx]
-        arc::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.escapeEvent, q, [0, 12.0*pi], env.EMDynamicsModel, [env.EarthHill_EM])
-        qf::Vector{Float64} = getStateByIndex(arc, -1)
-        (escEs[escIdx], _) = getEscapeEnergy(env, qf)
-        grads[escIdx] = getEnergyGradient(env, q)
-    end
 
-    MATLAB.put_variable(mf, :Deltav2s, Deltav2s)
-    MATLAB.put_variable(mf, :EscapeEs, escEs)
-    MATLAB.put_variable(mf, :DeltaEs, grads)
+    # @views vs = sqrt.(qs[4,:].^2 .+ qs[5,:].^2)
+    # Deltav2s::Vector{Float64} = fill(NaN, (length(vec(volFlags))))
+    # escEs::Vector{Float64} = copy(Deltav2s)
+    # grads::Vector{Float64} = copy(Deltav2s)
+    # escIndices::Vector{Int64} = findall(f -> f == 0, vec(volFlags))
+    # Threads.@threads for escIdx::Int64 in escIndices
+    #     q::Vector{Float64} = volqs[:,1,escIdx]
+    #     Deltav2s[escIdx] = sqrt(q[4]^2+q[5]^2)-vs[idx]
+    #     arc::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.escapeEvent, q, [0, 12.0*pi], env.EMDynamicsModel, [env.EarthHill_EM])
+    #     qf::Vector{Float64} = getStateByIndex(arc, -1)
+    #     (escEs[escIdx], _) = getEscapeEnergy(env, qf)
+    #     grads[escIdx] = getEnergyGradient(env, q)
+    # end
+
+    # MATLAB.put_variable(mf, :Deltav2s, Deltav2s)
+    # MATLAB.put_variable(mf, :EscapeEs, escEs)
+    # MATLAB.put_variable(mf, :DeltaEs, grads)
 
     """Maneuver Sequencing"""
     qTraj::Vector{Float64} = qs[:,idx]
@@ -639,74 +645,58 @@ function escapeAnalysisCR3BP(env::EscEnv, JC::Float64, primary::Int64, flags::Ve
     escv::Float64 = NaN
     Deltav1::Float64 = 0
     Deltav2::Float64 = 0
-    Deltav3::Float64 = 0
     qNew::Vector{Float64} = zeros(Float64, 6)
     JCNew::Float64 = JC
     escENew::Float64 = NaN
     escvNew::Float64 = NaN
-    if flags[idx] == 0
-        println("Direct: $(flags[idx])")
-        (escE, escv) = getEscapeEnergy(env, qTraj)
-        (Deltav3, JCNew) = optimizeForTransit(env, JC, qTraj, volJCs, volFlags[:,1], volqs[:,1,:])
-        vMag = LinearAlgebra.norm(qTraj[4:6])
-        vhat = qTraj[4:6]./vMag
-        qNew = append!(qTraj[1:3], (vMag+Deltav3) .* vhat)
-        (escENew, escvNew) = getEscapeEnergy(env, qNew)
-    elseif (0 < flags[idx] < 6)
-        println("Indirect: $(flags[idx])")
-        (escE, escv) = getEscapeEnergy(env, qTraj)
-        apoIndices::Vector{Int64} = findall(i -> i == idx, apoapsesIndices)
-        qApo::Vector{Float64} = apoapses[:,apoIndices[end]]
-        if apoapsisTest(env, primary, qApo)
-            # Needs testing
-            println("Apogee maneuver")
-            (Deltav2, JCNew) = trajOptimizeForTransit(env, JC, qApo, 0, qsApo, flagsApo, apoVolFileName)
-            vMag = LinearAlgebra.norm(qApo[4:6])
-            vhat = qApo[4:6]./vMag
-            qNew = append!(qApo[1:3], (vMag+Deltav2) .* vhat)
-        else
-            println("Propagate")
+    if apse == :peri
+        if flags[idx] == 0
+            println("Direct: $(flags[idx])")
+            (escE, escv) = getEscapeEnergy(env, qTraj)
+            (Deltav2, JCNew) = optimizeForTransit(env, JC, qTraj, volJCs, volFlags[:,1], volqs[:,1,:])
+            vMag = LinearAlgebra.norm(qTraj[4:6])
+            vhat = qTraj[4:6]./vMag
+            qNew = append!(qTraj[1:3], (vMag+Deltav2) .* vhat)
+            (escENew, escvNew) = getEscapeEnergy(env, qNew)
+        elseif (0 < flags[idx] < 6)
+            println("Indirect: $(flags[idx])")
+            (escE, escv) = getEscapeEnergy(env, qTraj)
             periIndices::Vector{Int64} = findall(i -> i == idx, periapsesIndices)
             qPeri::Vector{Float64} = periapses[:,periIndices[end]]
-            (Deltav3, JCNew) = trajOptimizeForTransit(env, JC, qPeri, 0, qs, flags, volFileName)
+            (Deltav2, JCNew) = trajOptimizeForTransit(env, JC, qPeri, 0, qs, flags, volFileName)
             vMag = LinearAlgebra.norm(qPeri[4:6])
             vhat = qPeri[4:6]./vMag
-            qNew = append!(qPeri[1:3], (vMag+Deltav3) .* vhat)
-        end
-        (escENew, escvNew) = getEscapeEnergy(env, qNew)
-    elseif (flags[idx] == 6) || (flags[idx] == 7)
-        println("Failure: $(flags[idx])")
-        (Deltav1, JCNew) = feasibleEscape(JC, qTraj, volJCs, volFlags[:,1], volqs[:,1,:])
-        if Deltav1 != 100.0
-            println("Perigee maneuver")
+            qNew = append!(qPeri[1:3], (vMag+Deltav2) .* vhat)
+            (escENew, escvNew) = getEscapeEnergy(env, qNew)
+        elseif (flags[idx] == 6) || (flags[idx] == 7)
+            println("Failure: $(flags[idx])")
+            (Deltav1, JCNew) = feasibleEscape(JC, qTraj, volJCs, volFlags[:,1], volqs[:,1,:])
+            (Deltav1 == 100.0) && println("High energy maneuver")
             vMag = LinearAlgebra.norm(qTraj[4:6])
             vhat = qTraj[4:6]./vMag
             qNew = append!(qTraj[1:3], (vMag+Deltav1) .* vhat)
-        else
-            # Needs testing
-            apoIndicesFail::Vector{Int64} = findall(i -> i == idx, apoapsesIndices)
-            qApoFail::Vector{Float64} = apoapses[:,apoIndicesFail[1]]
-            (Deltav1, JCNew) = trajFeasibleEscape(env, JC, primary, qApoFail, flags[idx], qsApo, flagsApo, apoVolFineName)
-            if Deltav1 != 100.0
-                println("Apogee maneuver")
-                vMag = LinearAlgebra.norm(qApoFail[4:6])
-                vhat = qApoFail[4:6]./vMag
-                qNew = append!(qApoFail[1:3], (vMag+Deltav1) .* vhat)
-            else
-                println("High energy maneuver")
-                vMag = LinearAlgebra.norm(qTraj[4:6])
-                vhat = qTraj[4:6]./vMag
-                qNew = append!(qTraj[1:3], (vMag+Deltav1) .* vhat)
-            end
+            (escENew, escvNew) = getEscapeEnergy(env, qNew)
         end
-        (escENew, escvNew) = getEscapeEnergy(env, qNew)
+    elseif apse == :apo
+        if flags[idx] == 0
+            println("Direct: $(flags[idx])")
+        elseif (0 < flags[idx] < 6)
+            println("Indirect: $(flags[idx])")
+        elseif (flags[idx] == 6) || (flags[idx] == 7)
+            println("Failure: $(flags[idx])")
+            (Deltav1, JCNew) = feasibleEscape(JC, qTraj, volJCs, volFlags[:,1], volqs[:,1,:])
+            (Deltav1 == 100.0) && println("High energy maneuver")
+            vMag = LinearAlgebra.norm(qTraj[4:6])
+            vhat = qTraj[4:6]./vMag
+            qNew = append!(qTraj[1:3], (vMag+Deltav1) .* vhat)
+            (escENew, escvNew) = getEscapeEnergy(env, qNew)
+        end
     end
 
     println("Old energy: $escE")
     println("Old velocity: $escv")
     println("Delta-v 1: $Deltav1")
     println("Delta-v 2: $Deltav2")
-    println("Delta-v 3: $Deltav3")
     println("New JC: $JCNew")
     println("New energy: $escENew")
     println("New velocity: $escvNew")
@@ -714,14 +704,13 @@ function escapeAnalysisCR3BP(env::EscEnv, JC::Float64, primary::Int64, flags::Ve
     MATLAB.put_variable(mf, :escv, escv)
     MATLAB.put_variable(mf, :Deltav1, Deltav1)
     MATLAB.put_variable(mf, :Deltav2, Deltav2)
-    MATLAB.put_variable(mf, :Deltav3, Deltav3)
     MATLAB.put_variable(mf, :qMan, qNew)
     MATLAB.put_variable(mf, :newJC, JCNew)
     MATLAB.put_variable(mf, :newEscE, escENew)
     MATLAB.put_variable(mf, :newEscv, escvNew)
 end
 
-function assistedEscapeAnalysisCR3BP(env::EscEnv, JC::Float64, apse::Symbol, flags::Vector{Int64}, qs::Matrix{Float64}, volFileName::String, mf::MATLAB.MatFile)
+function assistedEscapeAnalysisCR3BP(env::EscEnv, JC::Float64, apse::Symbol, maneuver::Int64, flags::Vector{Int64}, qs::Matrix{Float64}, volFileName::String, mf::MATLAB.MatFile)
     indices::Vector{Int64} = collect(1:length(flags))
     JCRange::Vector{Float64} = [3.18, 2.8]
     (volJCs::Vector{Float64}, volFlags::Matrix{Int64}, volqs::Array{Float64, 3}) = pruneVolumeData(JCRange, indices, volFileName)
@@ -732,17 +721,26 @@ function assistedEscapeAnalysisCR3BP(env::EscEnv, JC::Float64, apse::Symbol, fla
         idx::Int64 = indices[j]
         qTraj::Vector{Float64} = qs[:,idx]
         if apse == :peri
-            if flags[idx] == 0
+            if (flags[idx] == 0) && (maneuver == 2)
                 (Deltav2s[idx], JCNews[idx]) = optimizeForTransit(env, JC, qTraj, volJCs, volFlags[:,j], volqs[:,j,:])
             elseif (0 < flags[idx] < 6)
-            elseif (flags[idx] == 6) || (flags[idx] == 7)
+            elseif ((flags[idx] == 6) || (flags[idx] == 7)) && (maneuver == 1)
                 (Deltav1s[idx], JCNews[idx]) = feasibleEscape(JC, qTraj, volJCs, volFlags[:,j], volqs[:,j,:])
             else
                 Deltav1s[idx] = NaN
                 Deltav2s[idx] = NaN
                 JCNews[idx] = NaN
             end
-        else
+        elseif apse == :apo
+            if flags[idx] == 0
+            elseif (0 < flags[idx] < 6)
+            elseif ((flags[idx] == 6) || (flags[idx] == 7)) && (maneuver == 1)
+                (Deltav1s[idx], JCNews[idx]) = feasibleEscape(JC, qTraj, volJCs, volFlags[:,j], volqs[:,j,:])
+            else
+                Deltav1s[idx] = NaN
+                Deltav2s[idx] = NaN
+                JCNews[idx] = NaN
+            end
         end
     end
 
@@ -752,7 +750,6 @@ function assistedEscapeAnalysisCR3BP(env::EscEnv, JC::Float64, apse::Symbol, fla
 end
 
 function getPeriapsisStates(env::EscEnv, primary::Int64, orbit::MBD.CR3BPPeriodicOrbit, mf::MATLAB.MatFile)
-    # Needs testing
     posUnstableManifold::MBD.CR3BPManifold = getManifoldByArclength(orbit, "Unstable", "Positive", 25/env.charValues.EM.lstar, 100)
     negUnstableManifold::MBD.CR3BPManifold = getManifoldByArclength(orbit, "Unstable", "Negative", 25/env.charValues.EM.lstar, 100)
     posUnstableManifold.TOF, negUnstableManifold.TOF = 4.0*pi, 4.0*pi
@@ -765,10 +762,11 @@ function getPeriapsisStates(env::EscEnv, primary::Int64, orbit::MBD.CR3BPPeriodi
         q0::Vector{Float64} = real(unstableManifoldArcs[m].initialCondition)
         q0s[:,m] = q0
         periArc::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.periapsisEvent, q0, [0, unstableManifoldArcs[m].TOF], env.EMDynamicsModel, [center, primary])
+        qPeri::Vector{Float64} = getStateByIndex(periArc, -1)
         tPeri::Float64 = getTimeByIndex(periArc, -1)
         h::Vector{Float64} = cross(qPeri[1:3], qPeri[4:6])
         if (tPeri < unstableManifoldArcs[m].TOF) && (h[3] > 0)
-            qPeris[:,m] = getStateByIndex(periArc, -1)
+            qPeris[:,m] = qPeri
             tPeris[m] = tPeri
         else
             qPeris[:,m] = fill(NaN, 6)
@@ -885,18 +883,18 @@ function clusterTrajectoriesCR3BP(env::EscEnv, flags::Vector{Int64}, qs::Matrix{
     MATLAB.put_variable(mf, :clusters, clustersBest)
 end
 
-function run_apseMapCR3BP(JC::Float64, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro)
+function run_apseMapCR3BP(JC::Float64, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro, apses::Bool = true)
     mf = MATLAB.MatFile("Output/ApseMaps/CR3BP_$(string(primary))_$(string(apse))_$(string(grade))_$(string(n))_$(string(JC)).mat", "w")
         
     env::EscEnv = setupEnvironment()
 
     rGrid::Vector{StaticArrays.SVector{2, Float64}} = getGrid(env, n, primary)
-    apseMapCR3BP(env, JC, primary, rGrid, mf; apse = apse, grade = grade)
+    apseMapCR3BP(env, JC, primary, rGrid, mf; apse = apse, grade = grade, apses = apses)
     
     MATLAB.close(mf)
 end
 
-function run_apseMapsCR3BP(JCs::Vector{Float64}, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro)
+function run_apseMapsCR3BP(JCs::Vector{Float64}, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro, apses::Bool = false)
     mf = MATLAB.MatFile("Output/ApseMaps/CR3BPJCVolume_$(string(primary))_$(string(apse))_$(string(grade))_$(string(n))_$(string(minimum(JCs)))_$(string(maximum(JCs))).mat", "w")
 
     env::EscEnv = setupEnvironment()
@@ -905,46 +903,35 @@ function run_apseMapsCR3BP(JCs::Vector{Float64}, n::Int64, primary::Int64; apse:
     o::Int64 = length(JCs)
     for j::Int64 in eachindex(JCs)
         println("\nProducing map $j / $o: JC = $(JCs[j])...")
-        apseMapCR3BP(env, JCs[j], primary, rGrid, mf; apse = apse, grade = grade)
+        apseMapCR3BP(env, JCs[j], primary, rGrid, mf; apse = apse, grade = grade, apses = apses)
     end
 
     MATLAB.close(mf)
 end
 
-function run_escapeAnalysisCR3BP(periFileName::String, apoFileName::String, mapName::String, primary::Int64, periVolFileName::String, apoVolFileName::String, idx::Int64)
-    mf_inPeri = MATLAB.MatFile(periFileName, "r")
+function run_escapeAnalysisCR3BP(fileName::String, mapName::String, apse::Symbol, volFileName::String, idx::Int64)
+    mf_in = MATLAB.MatFile(fileName, "r")
 
-    periMap::Dict{String, Any} = get_variable(mf_inPeri, mapName)
+    map::Dict{String, Any} = get_variable(mf_in, mapName)
 
-    MATLAB.close(mf_inPeri)
+    MATLAB.close(mf_in)
 
-    JC::Float64 = periMap["JC"]
-    qsPeri::Matrix{Float64} = periMap["q"]
-    flagsPeri::Vector{Int64} = periMap["flags"]
-    apoapses::Matrix{Float64} = periMap["apoapses"]
-    apoapsesIndices::Vector{Int64} = periMap["apoapsesIndices"]
-    periapses::Matrix{Float64} = periMap["periapses"]
-    periapsesIndices::Vector{Int64} = periMap["periapsesIndices"]
+    JC::Float64 = map["JC"]
+    qs::Matrix{Float64} = map["q"]
+    flags::Vector{Int64} = map["flags"]
+    periapses::Matrix{Float64} = map["periapses"]
+    periapsesIndices::Vector{Int64} = map["periapsesIndices"]
 
-    mf_inApo = MATLAB.MatFile(apoFileName, "r")
-
-    apoMap::Dict{String, Any} = get_variable(mf_inApo, mapName)
-
-    MATLAB.close(mf_inApo)
-
-    qsApo::Matrix{Float64} = apoMap["q"]
-    flagsApo::Vector{Int64} = apoMap["flags"]
-
-    mf_out = MATLAB.MatFile("Output/EscapeAnalysisCR3BP.mat", "w")
+    mf_out = MATLAB.MatFile("Output/EscapeAnalysisCR3BP.mat", "w")    
 
     env::EscEnv = setupEnvironment()
 
-    escapeAnalysisCR3BP(env, JC, primary, flagsPeri, qsPeri, flagsApo, qsApo, apoapses, apoapsesIndices, periapses, periapsesIndices, periVolFileName, apoVolFileName, idx, mf_out)
+    escapeAnalysisCR3BP(env, JC, apse, flags, qs, periapses, periapsesIndices, volFileName, idx, mf_out)
 
     MATLAB.close(mf_out)
 end
 
-function run_assistedEscapeAnalysisCR3BP(fileName::String, mapName::String, volFileName::String; apse::Symbol = :peri)
+function run_assistedEscapeAnalysisCR3BP(fileName::String, mapName::String, apse::Symbol, maneuver::Int64, volFileName::String)
     mf_in = MATLAB.MatFile(fileName, "r")
 
     map::Dict{String, Any} = get_variable(mf_in, mapName)
@@ -959,7 +946,7 @@ function run_assistedEscapeAnalysisCR3BP(fileName::String, mapName::String, volF
 
     env::EscEnv = setupEnvironment()
 
-    assistedEscapeAnalysisCR3BP(env, JC, apse, flags, qs, volFileName, mf_out)
+    assistedEscapeAnalysisCR3BP(env, JC, apse, maneuver, flags, qs, volFileName, mf_out)
 
     MATLAB.close(mf_out)
 end
