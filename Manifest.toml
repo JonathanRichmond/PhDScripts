@@ -2,7 +2,7 @@
 
 julia_version = "1.11.9"
 manifest_format = "2.0"
-project_hash = "da8b239a028b63be4f617d4c89556726a8afaea1"
+project_hash = "709943b32a483136526bd3969a07d88c21143ee9"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -1127,6 +1127,12 @@ deps = ["Artifacts", "Preferences"]
 git-tree-sha1 = "7204148362dafe5fe6a273f855b8ccbe4df8173e"
 uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
 version = "1.8.0"
+
+[[deps.JMcDM]]
+deps = ["Requires"]
+git-tree-sha1 = "ee1fc1d38d944ab0f81b4bc32aec06183fc9106a"
+uuid = "358108f5-d052-4d0a-8344-d5384e00c0e5"
+version = "0.8.5"
 
 [[deps.JSON]]
 deps = ["Dates", "Mmap", "Parsers", "Unicode"]
