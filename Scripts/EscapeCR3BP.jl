@@ -3,7 +3,7 @@ Script for computing CR3BP escape trajectories in the Earth-Moon system
 
 Author: Jonathan LeFevre Richmond
 C: 6/16/26
-U: 9/24/26
+U: 10/1/26
 """
 
 module EscCR3BP
@@ -25,6 +25,7 @@ struct EscEnv
     EDynamicsModel::MBD.KDynamicsModel
     EMDynamicsModel::MBD.CR3BPDynamicsModel
     EMEoMs::MBD.CR3BPEquationsOfMotion
+    MDynamicsModel::MBD.KDynamicsModel
     SEDynamicsModel::MBD.CR3BPDynamicsModel
     SMDynamicsModel::MBD.CR3BPDynamicsModel
 
@@ -39,17 +40,24 @@ struct EscEnv
     escapeEvent
     flybyEvent
     MoonEvent
-    orbitTargeter
+    orbitDepartureEvent
+    periapsesEvents
     periapsisEvent
+    planarJCTargeter
     propagator::MBD.Propagator
     propagator_AL::MBD.Propagator
+    propagator_M::MBD.Propagator
     propagator_STM::MBD.Propagator
 
     circHillv::Float64
     EarthHill_EM::Float64
     EarthRadius_EM::Float64
+    MoonFlybyAlt_EM::Float64
     MoonHill_EM::Float64
     MoonRadius_EM::Float64
+    rEsc_EM::Float64
+
+    EMMomentumDiff::Float64
 end
 
 function apoapsisCondition(state::Vector{Float64}, time::Float64, integrator)
@@ -105,16 +113,57 @@ function periapsisCondition(state::Vector{Float64}, time::Float64, integrator)
     time-integrator.sol.prob.tspan[1] < 1E-6 ? 0.01 : LinearAlgebra.dot(state[1:3]-integrator.p[2], state[4:6])
 end
 
+function periapsesConditions(out::SubArray{Float64}, state::Vector{Float64}, time::Float64, integrator)
+    out[1] = LinearAlgebra.dot(state[1:3]-integrator.p[3], state[4:6])
+    out[2] = LinearAlgebra.dot(state[1:3]-integrator.p[4], state[4:6])
+    out[3] = LinearAlgebra.norm(state[1:3])-integrator.p[5]
+end
+
+function isPerilune(EMDynamicsModel::MBD.CR3BPDynamicsModel, q::Vector{Float64}, lstar::Float64, tstar::Float64, MDynamicsModel::MBD.KDynamicsModel)
+    q0_MCI::Vector{Float64} = rotatingToPrimaryInertial(EMDynamicsModel, 2, [q], [0.0])[1]
+    Q0_MCI::Vector{Float64} = append!(q0_MCI[1:3] .* lstar, q0_MCI[4:6] .* lstar ./ tstar)
+    oe0::Vector{Float64} = getOrbitalElements(MDynamicsModel, Q0_MCI)
+    E_M::Float64 = getEnergy(MDynamicsModel, oe0)
+    
+    return (E_M < 0)
+end
+
+function trajAffect!(integrator, index)
+    idx = findfirst(!=(0), index)
+    if idx == 1
+        if (index[idx] == 1) && !isPerilune(integrator.p[6], integrator.u, integrator.p[7], integrator.p[8], integrator.p[9])
+            integrator.p[2][1].count += 1
+            push!(integrator.p[2][1].states, copy(integrator.u))
+            push!(integrator.p[2][1].times, copy(integrator.t))
+            DifferentialEquations.terminate!(integrator)
+        end
+    elseif idx == 2
+        if (index[idx] == 1) && isPerilune(integrator.p[6], integrator.u, integrator.p[7], integrator.p[8], integrator.p[9])
+            integrator.p[2][2].count += 1
+            push!(integrator.p[2][2].states, copy(integrator.u))
+            push!(integrator.p[2][2].times, copy(integrator.t))
+            DifferentialEquations.terminate!(integrator)
+        end
+    elseif idx == 3
+        integrator.p[2][3].count += 1
+        push!(integrator.p[2][3].states, copy(integrator.u))
+        push!(integrator.p[2][3].times, copy(integrator.t))
+        DifferentialEquations.terminate!(integrator)
+    end
+end
+
 function xValueCondition(state::Vector{Float64}, time::Float64, integrator)
     state[1]-integrator.p[2]
 end
 
 function setupEnvironment()::EscEnv
     ESystemData = MBD.KSystemData("Earth")
+    MSystemData = MBD.KSystemData("Moon")
     EMSystemData = MBD.CR3BPSystemData("Earth", "Moon")
     SESystemData = MBD.CR3BPSystemData("Sun", "Earth")
     SMSystemData = MBD.CR3BPSystemData("Sun", "Mars")
     EDynamicsModel = MBD.KDynamicsModel(ESystemData)
+    MDynamicsModel = MBD.KDynamicsModel(MSystemData)
     EMDynamicsModel = MBD.CR3BPDynamicsModel(EMSystemData)
     SEDynamicsModel = MBD.CR3BPDynamicsModel(SESystemData)
     SMDynamicsModel = MBD.CR3BPDynamicsModel(SMSystemData)
@@ -130,22 +179,29 @@ function setupEnvironment()::EscEnv
     propagator = MBD.Propagator()
     propagator_STM = MBD.Propagator(equationType = MBD.STM)
     propagator_AL = MBD.Propagator(equationType = MBD.ARCLENGTH)
+    propagator_M = MBD.Propagator(equationType = MBD.MOMENTUM)
     apoapsisEvent = DifferentialEquations.ContinuousCallback(apoapsisCondition, nothing, apseEndAffect!)
     arclengthEvent = DifferentialEquations.ContinuousCallback(arclengthCondition, terminateAffect!)
     endEvents = DifferentialEquations.VectorContinuousCallback(endConditions, endAffect!, 4)
     escapeEvent = DifferentialEquations.ContinuousCallback(escapeCondition, terminateAffect!)
-    flybyEvent = DifferentialEquations.ContinuousCallback(p1CR3BPDistanceCondition, terminateAffect!)
+    flybyEvent = DifferentialEquations.ContinuousCallback(periapsisCondition, terminateAffect!, nothing)
     MoonEvent = DifferentialEquations.ContinuousCallback(xValueCondition, terminateAffect!)
+    orbitDepartureEvent = DifferentialEquations.ContinuousCallback(momentumDifferenceConditionCR3BP, terminateAffect!)
     periapsisEvent = DifferentialEquations.ContinuousCallback(periapsisCondition, apseEndAffect!, nothing)
-    orbitTargeter = PlanarPerpJCTargeter(EMDynamicsModel)
+    periapsesEvents = DifferentialEquations.VectorContinuousCallback(periapsesConditions, trajAffect!, 3)
+    planarJCTargeter = PlanarPerpJCTargeter(EMDynamicsModel)
 
     EarthRadius_EM::Float64 = primaries[1].bodyRadius/charValues.EM.lstar
     MoonRadius_EM::Float64 = primaries[2].bodyRadius/charValues.EM.lstar
     EarthHill_EM::Float64 = charValues.SE.lstar*cbrt(getMassRatio(SESystemData)/3)/charValues.EM.lstar
     MoonHill_EM::Float64 = cbrt(getMassRatio(EMSystemData)/3)
+    rEsc_EM::Float64 = 1.5
+    MoonFlybyAlt_EM::Float64 = MoonRadius_EM+100/charValues.EM.lstar
     circHillv::Float64 = sqrt(2*primaries[1].gravParam/(EarthHill_EM*charValues.EM.lstar))
 
-    return EscEnv(EDynamicsModel, EMDynamicsModel, EMEoMs, SEDynamicsModel, SMDynamicsModel, primaries, Sun, charValues, apoapsisEvent, arclengthEvent, endEvents, escapeEvent, flybyEvent, MoonEvent, orbitTargeter, periapsisEvent, propagator, propagator_AL, propagator_STM, circHillv, EarthHill_EM, EarthRadius_EM, MoonHill_EM, MoonRadius_EM)
+    EMMomentumDiff::Float64 = 1E-2
+
+    return EscEnv(EDynamicsModel, EMDynamicsModel, EMEoMs, MDynamicsModel, SEDynamicsModel, SMDynamicsModel, primaries, Sun, charValues, apoapsisEvent, arclengthEvent, endEvents, escapeEvent, flybyEvent, MoonEvent, orbitDepartureEvent, periapsesEvents, periapsisEvent, planarJCTargeter, propagator, propagator_AL, propagator_M, propagator_STM, circHillv, EarthHill_EM, EarthRadius_EM, MoonFlybyAlt_EM, MoonHill_EM, MoonRadius_EM, rEsc_EM, EMMomentumDiff)
 end
 
 function isInterior(q::AbstractVector{Float64}, mu::Float64, rE::AbstractVector{Float64}, rM::AbstractVector{Float64})
@@ -373,6 +429,24 @@ function getEnergyGradient(env::EscEnv, q0::Vector{Float64})
     return only(dEdQI*dQIdqI*dqIdqR*(dqRdq0*dq0dv0+dqRdtau*dtaudv0)*dv0dalpha)
 end
 
+function getRadiusGradient(env::EscEnv, q0::Vector{Float64})
+    qM::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 2)
+    arc::MBD.CR3BPArc = propagateWithEvent(env.propagator_STM, env.flybyEvent, appendExtraInitialConditions(env.EMDynamicsModel, q0, MBD.STM), [0, 4.0*pi], env.EMDynamicsModel, [qM[1:3]])
+    qf::Vector{Float64} = getStateByIndex(arc, -1)
+    qf_M::Vector{Float64} = qf[1:6]-qM
+    drMdqR::Matrix{Float64} = [qf_M[1:3]' ./ LinearAlgebra.norm(qf_M[1:3]) zeros(Float64, (1,3))]
+    dqRdq0::Matrix{Float64} = getStateTransitionMatrix(env.EMDynamicsModel, qf)
+    dq0dv0::Matrix{Float64} = [zeros(Float64, (3,3)); LinearAlgebra.I]
+    qfdot::Vector{Float64} = zeros(Float64, 6)
+    computeDerivatives!(qfdot, qf[1:6], (env.EMEoMs,), 0.0)
+    dqRdtau::Matrix{Float64} = reshape(qfdot, (6,1))
+    dgdqR::Matrix{Float64} = [qf_M[4:6]' qf_M[1:3]']
+    dtaudv0::Matrix{Float64} = -dgdqR*dqRdq0*dq0dv0./(dgdqR*dqRdtau)
+    dv0dalpha::Matrix{Float64} = reshape(q0[4:6], (3,1))./LinearAlgebra.norm(q0[4:6])
+
+    return only(drMdqR*(dqRdq0*dq0dv0+dqRdtau*dtaudv0)*dv0dalpha)
+end
+
 # function getEnergyGradientFull(env::EscEnv, q0::Vector{Float64})
 #     mu::Float64 = env.primaries[1].gravParam
 #     arc::MBD.CR3BPArc = propagateWithEvent(env.propagator_STM, env.escapeEvent, appendExtraInitialConditions(env.EMDynamicsModel, q0, MBD.STM), [0, 12.0*pi], env.EMDynamicsModel, [env.EarthHill_EM])
@@ -490,6 +564,54 @@ function optimizeForTransit(env::EscEnv, JC::Float64, primary::Int64, q0::Vector
     return (Deltav, JCNew)
 end
 
+function optimizeForFlyby(env::EscEnv, JC::Float64, q0::Vector{Float64}, volJCs::Vector{Float64}, qs::Matrix{Float64})
+    v::Float64 = sqrt(q0[4]^2+q0[5]^2)
+    rM::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 2)[1:3]
+    arc::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.flybyEvent, q0, [0, 4.0*pi], env.EMDynamicsModel, [rM])
+    qFly::Vector{Float64} = getStateByIndex(arc, -1)
+    rFly::Float64 = LinearAlgebra.norm(qFly[1:3]-rM)
+    grad::Float64 = getRadiusGradient(env, q0)
+    qPrev::Vector{Float64} = copy(q0)
+    qNew::Vector{Float64} = copy(q0)
+    Deltav::Float64 = 0.0
+    JCNew::Float64 = JC
+    JCIdx::Int64 = 0
+    if grad <= 0
+        JCIdx = findfirst(x -> x < JC, volJCs)
+        while (grad < 0) && (JCIdx <= length(volJCs)) && (rFly > env.MoonFlybyAlt_EM)
+            qPrev = copy(qNew)
+            qNew = qs[:,JCIdx]
+            grad = getRadiusGradient(env, qNew)
+            arc = propagateWithEvent(env.propagator, env.flybyEvent, qNew, [0, 4.0*pi], env.EMDynamicsModel, [rM])
+            qFly = getStateByIndex(arc, -1)
+            rFly = LinearAlgebra.norm(qFly[1:3]-rM)
+            JCIdx += 1
+        end
+    else
+        JCIdx = findlast(x -> x > JC, volJCs)
+        while (grad > 0) && (JCIdx >= 1) && (rFly > env.MoonFlybyAlt_EM)
+            qPrev = copy(qNew)
+            qNew = qs[:,JCIdx]
+            grad = getRadiusGradient(env, qNew)
+            arc = propagateWithEvent(env.propagator, env.flybyEvent, qNew, [0, 4.0*pi], env.EMDynamicsModel, [rM])
+            qFly = getStateByIndex(arc, -1)
+            rFly = LinearAlgebra.norm(qFly[1:3]-rM)
+            JCIdx -= 1
+        end
+    end
+    arcPrev::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.flybyEvent, qPrev, [0, 4.0*pi], env.EMDynamicsModel, [rM])
+    qFlyPrev::Vector{Float64} = getStateByIndex(arcPrev, -1)
+    rFlyPrev::Float64 = LinearAlgebra.norm(qFlyPrev[1:3]-rM)
+    arcNew::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.flybyEvent, qNew, [0, 4.0*pi], env.EMDynamicsModel, [rM])
+    qFlyNew::Vector{Float64} = getStateByIndex(arcNew, -1)
+    rFlyNew::Float64 = LinearAlgebra.norm(qFlyNew[1:3]-rM)
+    qOpt::Vector{Float64} = (rFlyPrev < rFlyNew) ? copy(qPrev) : copy(qNew)
+    Deltav = sqrt(qOpt[4]^2+qOpt[5]^2)-v
+    JCNew = getJacobiConstant(env.EMDynamicsModel, qOpt)
+
+    return (Deltav, JCNew)
+end
+
 function feasibleEscape(JC::Float64, q0::Vector{Float64}, volJCs::Vector{Float64}, flags::Vector{Int64}, qs::Matrix{Float64})
     v::Float64 = sqrt(q0[4]^2+q0[5]^2)
     JCIdx::Int64 = findfirst(x -> x < JC, volJCs)
@@ -569,6 +691,32 @@ function findClosestNoFlag(q::Vector{Float64}, qs::Matrix{Float64})
     return (qs[:,bestIdx], bestIdx)
 end
 
+function findClosestFlagBias(q::Vector{Float64}, qs::Matrix{Float64}, flags::Vector{Int64})
+    xSort::Vector{Float64} = sort(qs[1,:])
+    ySort::Vector{Float64} = sort(qs[2,:])
+    xIdx::Int64 = searchsortedlast(xSort, q[1])
+    xIdx = min(xIdx, length(xSort)-1)
+    yIdx::Float64 = searchsortedlast(ySort, q[2])
+    yIdx = min(yIdx, length(ySort)-1)
+    corners::Vector{Tuple{Int64, Int64}} = [(xIdx, yIdx), (xIdx+1, yIdx), (xIdx, yIdx+1), (xIdx+1, yIdx+1)]
+    bestDist::Float64 = Inf
+    bestIdx::Int64 = 0
+    cornerFlags::Vector{Int64} = []
+    for (i::Int64, j::Int64) in corners
+        idx = findfirst(k -> ((abs(qs[1,k]-xSort[i]) < 1E-5) && (abs(qs[2,k]-ySort[j]) < 1E-5)), eachindex(qs[1,:]))
+        push!(cornerFlags, flags[idx])
+        dx::Float64 = xSort[i]-q[1]
+        dy::Float64 = ySort[j]-q[2]
+        dist::Float64 = sqrt(dx^2+dy^2)
+        if dist < bestDist
+            bestDist = dist
+            bestIdx = idx
+        end
+    end
+
+    return (qs[:,bestIdx], bestIdx, min(maximum(cornerFlags), 6))
+end
+
 function trajOptimizeForTransit(env::EscEnv, JC::Float64, primary::Int64, q::Vector{Float64}, flag::Int64, qs::Matrix{Float64}, flags::Vector{Int64}, volFileName::String)
     if primary == 2
         Deltav = 100.0
@@ -580,6 +728,18 @@ function trajOptimizeForTransit(env::EscEnv, JC::Float64, primary::Int64, q::Vec
     JCRange::Vector{Float64} = [3.18, 2.8]
     (volJCs::Vector{Float64}, volFlags::Matrix{Int64}, volqs::Array{Float64, 3}) = pruneVolumeData(JCRange, [idx], volFileName)
     (_, JCNew::Float64) = optimizeForTransit(env, JC, primary, qClosest, volJCs, vec(volFlags), dropdims(volqs, dims = 2))
+    r::Vector{Float64} = q[1:2]
+    vMag::Float64 = computeApseVelocities(env, JCNew, [StaticArrays.SVector{2, Float64}(r)])[1]
+    Deltav::Float64 = vMag-sqrt(q[4]^2+q[5]^2)
+
+    return (Deltav, JCNew)
+end
+
+function trajOptimizeForFlyby(env::EscEnv, JC::Float64, q::Vector{Float64}, qs::Matrix{Float64}, volFileName::String)
+    (qClosest::Vector{Float64}, idxClosest::Int64) = findClosestNoFlag(q, qs)
+    JCRange::Vector{Float64} = [3.18, 2.8]
+    (volJCs::Vector{Float64}, _, volqs::Array{Float64, 3}) = pruneVolumeData(JCRange, [idxClosest], volFileName)
+    (_, JCNew::Float64) = optimizeForFlyby(env, JC, qClosest, volJCs, dropdims(volqs, dims = 2))
     r::Vector{Float64} = q[1:2]
     vMag::Float64 = computeApseVelocities(env, JCNew, [StaticArrays.SVector{2, Float64}(r)])[1]
     Deltav::Float64 = vMag-sqrt(q[4]^2+q[5]^2)
@@ -606,11 +766,12 @@ function updateTrajectory(env::EscEnv, JC::Float64, primary::Int64, q::Vector{Fl
     return (Deltav, flag)
 end
 
-function trajFeasibleEscape(env::EscEnv, JC::Float64, primary::Int64, q::Vector{Float64}, flag::Int64, qs::Matrix{Float64}, flags::Vector{Int64}, volFileName::String)
+function trajFeasibleEscape(env::EscEnv, JC::Float64, primary::Int64, q::Vector{Float64}, qs::Matrix{Float64}, volFileName::String)
     (qClosest::Vector{Float64}, idx::Int64) = findClosestNoFlag(q, qs)
     JCRange::Vector{Float64} = [3.18, 2.8]
     (volJCs::Vector{Float64}, volFlags::Matrix{Int64}, volqs::Array{Float64, 3}) = pruneVolumeData(JCRange, [idx], volFileName)
     (_, JCNew::Float64) = feasibleEscape(JC, qClosest, volJCs, vec(volFlags), dropdims(volqs, dims = 2))
+    (JCNew == 0.0) && (return (100.0, 0.0))
     (Deltav::Float64, flag::Int64) = updateTrajectory(env, JCNew, primary, q)
     JCNewIdx::Int64 = findfirst(x -> x == JCNew, volJCs)
     iter::Int64 = 0
@@ -803,6 +964,8 @@ function assistedEscapeAnalysisCR3BP(env::EscEnv, JC::Float64, primary::Int64, a
             if (flags[idx] == 0)
                 if maneuver == 2
                     (Deltav2s[idx], JCNews[idx]) = optimizeForTransit(env, JC, primary, qTraj, volJCs, volFlags[:,j], volqs[:,j,:])
+                elseif maneuver == 3
+                    (Deltav2s[idx], JCNews[idx]) = optimizeForFlyby(env, JC, qTraj, volJCs, volqs[:,j,:])
                 end
             elseif (0 < flags[idx] < 6)
             elseif (flags[idx] == 6) || (flags[idx] == 7)
@@ -867,6 +1030,36 @@ function getPeriapsisStates(env::EscEnv, primary::Int64, orbit::MBD.CR3BPPeriodi
     MATLAB.put_variable(mf, :periProgrades, proPeris)
 
     return (q0s, qPeris, tPeris)
+end
+
+function getTrajStates(env::EscEnv, orbit::MBD.CR3BPPeriodicOrbit, mf::MATLAB.MatFile)
+    posUnstableManifold::MBD.CR3BPManifold = getManifoldByArclength(orbit, "Unstable", "Positive", 25/env.charValues.EM.lstar, 100)
+    negUnstableManifold::MBD.CR3BPManifold = getManifoldByArclength(orbit, "Unstable", "Negative", 25/env.charValues.EM.lstar, 100)
+    posUnstableManifold.TOF, negUnstableManifold.TOF = 12.0*pi, 12.0*pi
+    unstableManifoldArcs::Vector{MBD.CR3BPManifoldArc} = vcat(stopCrashes(posUnstableManifold), stopCrashes(negUnstableManifold))
+    qOrbits::Matrix{Float64} = Matrix{Float64}(undef, (6,length(unstableManifoldArcs)))
+    qMans::Matrix{Float64} = Matrix{Float64}(undef, (6,length(unstableManifoldArcs)))
+    t0s::Vector{Float64} = Vector{Float64}(undef, length(unstableManifoldArcs))
+    q0s::Matrix{Float64} = Matrix{Float64}(undef, (6,length(unstableManifoldArcs)))
+    Threads.@threads for a::Int64 in eachindex(unstableManifoldArcs)
+        manifoldArc::MBD.CR3BPManifoldArc = unstableManifoldArcs[a]
+        qMans[:,a] = real(manifoldArc.initialCondition)
+        orbitArc::MBD.CR3BPArc = propagate(env.propagator, orbit.initialCondition, [0, manifoldArc.orbitTime*orbit.period], env.EMDynamicsModel)
+        orbitState::Vector{Float64} = getStateByIndex(orbitArc, -1)
+        qOrbits[:,a] = orbitState
+        propManifoldArc::MBD.CR3BPArc = Logging.with_logger(NullLogger()) do
+            propagateWithEvent(env.propagator_M, env.orbitDepartureEvent, appendExtraInitialConditions(env.EMDynamicsModel, real(manifoldArc.initialCondition), MBD.MOMENTUM), [0, manifoldArc.TOF], env.EMDynamicsModel, [env.propagator_M, env.EMDynamicsModel, orbitState, env.EMMomentumDiff])
+        end
+        t0s[a] = getTimeByIndex(propManifoldArc, -1)
+        q0s[:,a] = getStateByIndex(propManifoldArc, -1)[1:6]
+    end
+
+    MATLAB.put_variable(mf, :orbitStates, qOrbits)
+    MATLAB.put_variable(mf, :manifoldStates, qMans)
+    MATLAB.put_variable(mf, :initialTimes, t0s)
+    MATLAB.put_variable(mf, :initialStates, q0s)
+
+    return (qOrbits, qMans, t0s, q0s)
 end
 
 function trajAssistedEscapeAnalysisCR3BP(env::EscEnv, JC::Float64, primary::Int64, qPeri::Vector{Float64}, qs::Matrix{Float64}, flags::Vector{Int64}, volFileName::String, mf::MATLAB.MatFile)
@@ -1045,6 +1238,165 @@ function trajAssistedEscapeAnalysisCR3BP(env::EscEnv, JC::Float64, primary::Int6
     MATLAB.put_variable(mf, :apos, reduce(hcat, apoapses))
 end
 
+function assistTrajEscapeCR3BP(env::EscEnv, JC::Float64, q0::Vector{Float64}, qEarths::Matrix{Float64}, qMoonPros::Matrix{Float64}, qMoonRetros::Matrix{Float64}, flagEarths::Vector{Int64}, flagMoonPros::Vector{Int64}, flagMoonRetros::Vector{Int64}, volFiles::Vector{String}, mf::MATLAB.MatFile)
+    perigee = MBD.EventTracker(0, :perigee, [], [])
+    perilune = MBD.EventTracker(0, :perilune, [], [])
+    escape = MBD.EventTracker(0, :escape, [], [])
+    rE::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 1)[1:3]
+    rM::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 2)[1:3]
+    (traj0Arc::MBD.CR3BPArc, eventTrackers::Vector{EventTracker}) = propagateWithEvents(env.propagator, env.periapsesEvents, q0, [0, 4.0*pi], env.EMDynamicsModel, [perigee, perilune, escape], [rE, rM, env.rEsc_EM, env.EMDynamicsModel, env.charValues.EM.lstar, env.charValues.EM.tstar, env.MDynamicsModel])
+    escapeBool::Bool = false
+    periluneBool::Bool = false
+    if eventTrackers[3].count == 1
+        escapeBool = true
+    elseif eventTrackers[2].count == 1
+        periluneBool = true
+    end
+    vMag::Float64 = NaN
+    vhat::Vector{Float64} = Vector{Float64}(undef, 3)
+    qPeri0::Vector{Float64} = Vector{Float64}(undef, 6)
+    tPeri0::Float64 = NaN
+    Deltav1::Float64 = NaN
+    qPeri1::Vector{Float64} = Vector{Float64}(undef, 6)
+    tPeri1::Float64 = NaN
+    JC1::Float64 = NaN
+    Deltav2::Float64 = NaN
+    qPeri2::Vector{Float64} = Vector{Float64}(undef, 6)
+    tPeri2::Float64 = NaN
+    JC2::Float64 = NaN
+    Deltav3::Float64 = NaN
+    qPeri3::Vector{Float64} = Vector{Float64}(undef, 6)
+    tPeri3::Float64 = NaN
+    JC3::Float64 = NaN
+    Deltav4::Float64 = NaN
+    qPeri4::Vector{Float64} = Vector{Float64}(undef, 6)
+    tPeri4::Float64 = NaN
+    if !escapeBool
+        qPeri0 = getStateByIndex(traj0Arc, -1)
+        println("First periapsis: $qPeri0")
+        println("Perilune? $periluneBool")
+        tPeri0 = getTimeByIndex(traj0Arc, -1)
+        if !periluneBool
+            (_, _, flagClosest::Int64) = findClosestFlagBias(qPeri0, qEarths, flagEarths)
+            println("First flag: $flagClosest")
+            if flagClosest == 6
+                apseTrackers1::Vector{MBD.EventTracker} = countApses(env, 1, :peri, qPeri0, true)
+                periapses1::Vector{Vector{Float64}} = append!([qPeri0], apseTrackers1[1].states)
+                periapsesTimes1::Vector{Float64} = append!([0.0], apseTrackers1[1].times)
+                Deltav1s::Vector{Float64} = Vector{Float64}(undef, length(periapses1))
+                q1s::Vector{Vector{Float64}} = Vector{Vector{Float64}}(undef, length(periapses1))
+                t1s::Vector{Float64} = Vector{Float64}(undef, length(periapses1))
+                JC1s::Vector{Float64} = Vector{Float64}(undef, length(periapses1))
+                flag1s::Vector{Int64} = Vector{Int64}(undef, length(periapses1))
+                for p::Int64 in eachindex(periapses1)
+                    qPeri::Vector{Float64} = periapses1[p]
+                    t1s[p] = periapsesTimes1[p]
+                    (Deltav1s[p], JC1s[p]) = trajFeasibleEscape(env, JC, 1, qPeri, qEarths, volFiles[1])
+                    vMag = LinearAlgebra.norm(qPeri[4:6])
+                    vhat = qPeri[4:6]./vMag
+                    q1s[p] = append!(qPeri[1:3], (vMag+Deltav1s[p]) .* vhat)
+                    (_, flag1s[p]) = updateTrajectory(env, JC1s[p], 1, q1s[p])
+                end
+                filt::Vector{Int64} = filter(p -> Deltav1s[p] < 100.0, eachindex(periapses1))
+                for p::Int64 in eachindex(periapses1)[filt]
+                    println("Peri $p: Deltav = $(Deltav1s[p]) | t = $(t1s[p]) | TOF = $(t1s[p]+pi*flag1s[p])")
+                end
+                isempty(filt) && throw(ErrorException("No low-energy maneuvers available"))
+                decision::Matrix{Float64} = [abs.(Deltav1s[filt]) t1s[filt]+pi .* flag1s[filt]]
+                weights::Vector{Float64} = [0.4, 0.6]
+                functions::Vector{Function} = [minimum, minimum]
+                opt::JMcDM.SawResult = JMcDM.saw(decision, weights, functions)
+                bestIdx::Int64 = opt.bestIndex
+                println("Chose periapsis $(filt[bestIdx])")
+                Deltav1 = Deltav1s[filt[bestIdx]]
+                qPeri1 = q1s[filt[bestIdx]]
+                tPeri1 = t1s[filt[bestIdx]]
+                JC1 = JC1s[filt[bestIdx]]
+                flagClosest = flag1s[filt[bestIdx]]
+                println("Delta-v 1: $Deltav1")
+                println("Second JC: $JC1")
+                println("Second flag: $flagClosest")
+            else
+                Deltav1 = 0.0
+                qPeri1 = copy(qPeri0)
+                tPeri1 = 0.0
+                JC1 = copy(JC)
+            end
+            (escE1::Float64, escv1::Float64) = getEscapeEnergy(env, qPeri1)
+            println("Escape energy 1: $escE1")
+            println("Escape velocity 1: $escv1")
+            if (flagClosest >= 0) && (flagClosest < 6)
+                apseTrackers2::Vector{MBD.EventTracker} = countApses(env, 1, :peri, qPeri1, true)
+                periapses2::Vector{Vector{Float64}} = append!([qPeri1], apseTrackers2[1].states)
+                periapsesTimes2::Vector{Float64} = append!([0.0], apseTrackers2[1].times)
+                escIdx::Int64 = findlast(q -> !isPerilune(env.EMDynamicsModel, q, env.charValues.EM.lstar, env.charValues.EM.tstar, env.MDynamicsModel), periapses2)
+                qPeriEsc::Vector{Float64} = periapses2[escIdx]
+                tPeri2 = periapsesTimes2[escIdx]
+                (Deltav2, JC2) = trajOptimizeForFlyby(env, JC1, qPeriEsc, qEarths, volFiles[1])
+                vMag = LinearAlgebra.norm(qPeriEsc[4:6])
+                vhat = qPeriEsc[4:6]./vMag
+                qPeri2 = append!(qPeriEsc[1:3], (vMag+Deltav2) .* vhat)
+                println("Delta-v 2: $Deltav2")
+                println("Third JC: $JC2")
+            else
+                Deltav2 = 0.0
+                qPeri2 = copy(qPeri1)
+                tPeri2 = 0.0
+                JC2 = copy(JC1)
+            end
+            (escE2::Float64, escv2::Float64) = getEscapeEnergy(env, qPeri2)
+            println("Escape energy 2: $escE2")
+            println("Escape velocity 2: $escv2")
+            apseTrackers3::Vector{MBD.EventTracker} = countApses(env, 2, :peri, qPeri2, true)
+            periapses3::Vector{Vector{Float64}} = apseTrackers3[1].states
+            periapsesTimes3::Vector{Float64} = apseTrackers3[1].times
+            qFlyby::Vector{Float64} = periapses3[1]
+            (_, flagMoons::Matrix{Int64}, qMoons::Array{Float64, 3}) = pruneVolumeData([round(JC2), round(JC2)], collect(eachindex(flagMoonPros)), volFiles[2])
+            (_, _, flagClosest3::Int64) = findClosestFlagBias(qFlyby, dropdims(qMoons, dims = 3), vec(flagMoons))
+            println("First lunar flag: $flagClosest3")
+            if flagClosest3 > 0
+            else
+                Deltav3 = 0.0
+                qPeri3 = copy(qPeri2)
+                tPeri3 = 0.0
+                JC3 = copy(JC2)
+                tPeri4 = periapsesTimes3[1]
+            end
+            (escE3::Float64, escv3::Float64) = getEscapeEnergy(env, qPeri3)
+            println("Escape energy 3: $escE3")
+            println("Escape velocity 3: $escv3")
+            Deltav4 = 0.5*env.charValues.EM.tstar/env.charValues.EM.lstar
+            vMag = LinearAlgebra.norm(qFlyby[4:6])
+            vhat = qFlyby[4:6]./vMag
+            qPeri4 = append!(qFlyby[1:3], (vMag+Deltav4) .* vhat)
+            println("Delta-v 4: $Deltav4")
+        else
+        end
+        (escE4::Float64, escv4::Float64) = getEscapeEnergy(env, qPeri4)
+        println("Escape energy 4: $escE4")
+        println("Escape velocity 4: $escv4")
+    else
+    end
+
+    MATLAB.put_variable(mf, :qPeri0, qPeri0)
+    MATLAB.put_variable(mf, :tPeri0, tPeri0)
+    MATLAB.put_variable(mf, :Deltav1, Deltav1)
+    MATLAB.put_variable(mf, :qPeri1, qPeri1)
+    MATLAB.put_variable(mf, :tPeri1, tPeri1)
+    MATLAB.put_variable(mf, :JC1, JC1)
+    MATLAB.put_variable(mf, :Deltav2, Deltav2)
+    MATLAB.put_variable(mf, :qPeri2, qPeri2)
+    MATLAB.put_variable(mf, :tPeri2, tPeri2)
+    MATLAB.put_variable(mf, :JC2, JC2)
+    MATLAB.put_variable(mf, :Deltav3, Deltav3)
+    MATLAB.put_variable(mf, :qPeri3, qPeri3)
+    MATLAB.put_variable(mf, :tPeri3, tPeri3)
+    MATLAB.put_variable(mf, :JC3, JC3)
+    MATLAB.put_variable(mf, :Deltav4, Deltav4)
+    MATLAB.put_variable(mf, :qPeri4, qPeri4)
+    MATLAB.put_variable(mf, :tPeri4, tPeri4)
+end
+
 function clusterTrajectoriesCR3BP(env::EscEnv, flags::Vector{Int64}, qs::Matrix{Float64}, mf::MATLAB.MatFile)
     esc0Indices::Vector{Int64} = findall(flags .== 0)
     n_esc0::Int64 = length(esc0Indices)
@@ -1181,6 +1533,68 @@ function run_assistApseStatesCR3BP(fileName::String, mapName::String, primary::I
 
     trajAssistedEscapeAnalysisCR3BP(env, JC, primary, qPeris[:,idx], qs, flags, volFileName, mf_out)
     
+    MATLAB.close(mf_out)
+end
+
+function run_assistTrajEscapeCR3BP(r0::Vector{Float64}, JC::Float64, mapName::String)
+    mf_in_perigee = MATLAB.MatFile("Output/ApseMaps/CR3BP_1_peri_pro_500_$(string(JC)).mat", "r")
+    map_perigee::Dict{String, Any} = get_variable(mf_in_perigee, mapName)
+    MATLAB.close(mf_in_perigee)
+
+    qEarths::Matrix{Float64} = map_perigee["q"]
+    flagEarths::Vector{Int64} = map_perigee["flags"]
+
+    volFiles::Vector{String} = ["../PhDMATLABScripts/CR3BPJCVolume_1_peri_pro_500_2.9_3.17.mat", "../PhDMATLABScripts/CR3BPJCVolume_2_peri_pro_500_2.9_3.17.mat", "../PhDMATLABScripts/CR3BPJCVolume_2_peri_retro_500_2.9_3.17.mat"]
+
+    mf_out = MATLAB.MatFile("Output/AssistTrajEscapeCR3BP.mat", "w")
+
+    env::EscEnv = setupEnvironment()
+
+    q0::Vector{Float64} = append!(r0, computeApseVelocities(env, JC, [StaticArrays.SVector{Float64, 2}(r0[1:2])])[1], 0)
+    assistTrajEscapeCR3BP(env, JC, q0, qEarths, flagEarths, volFiles, mf_out)
+
+    MATLAB.close(mf_out)
+end
+
+function run_assistOrbitEscapeCR3BP(family::String, JC::Float64, mapName::String, idx::Int64; dim::String = "planar")
+    mf_in_perigee = MATLAB.MatFile("Output/ApseMaps/CR3BP_1_peri_pro_500_$(string(JC)).mat", "r")
+    map_perigee::Dict{String, Any} = get_variable(mf_in_perigee, mapName)
+    MATLAB.close(mf_in_perigee)
+
+    mf_in_perilune_pro = MATLAB.MatFile("Output/ApseMaps/CR3BP_2_peri_pro_500_$(string(JC)).mat", "r")
+    map_perilune_pro::Dict{String, Any} = get_variable(mf_in_perilune_pro, mapName)
+    MATLAB.close(mf_in_perilune_pro)
+
+    mf_in_perilune_retro = MATLAB.MatFile("Output/ApseMaps/CR3BP_2_peri_retro_500_$(string(JC)).mat", "r")
+    map_perilune_retro::Dict{String, Any} = get_variable(mf_in_perilune_retro, mapName)
+    MATLAB.close(mf_in_perilune_retro)
+
+    qEarths::Matrix{Float64} = map_perigee["q"]
+    flagEarths::Vector{Int64} = map_perigee["flags"]
+
+    qMoonPros::Matrix{Float64} = map_perilune_pro["q"]
+    flagMoonPros::Vector{Int64} = map_perilune_pro["flags"]
+
+    qMoonRetros::Matrix{Float64} = map_perilune_retro["q"]
+    flagMoonRetros::Vector{Int64} = map_perilune_retro["flags"]
+
+    volFiles::Vector{String} = ["../PhDMATLABScripts/CR3BPJCVolume_1_peri_pro_500_2.9_3.17.mat", "../PhDMATLABScripts/CR3BPJCVolume_2_peri_pro_500_2.9_3.17.mat", "../PhDMATLABScripts/CR3BPJCVolume_2_peri_retro_500_2.9_3.17.mat"]
+
+    mf_out = MATLAB.MatFile("Output/AssistOrbitEscapeCR3BP.mat", "w")
+
+    env::EscEnv = setupEnvironment()
+
+    if dim == "planar"
+        targeter = env.planarJCTargeter
+    end
+    orbit::MBD.CR3BPPeriodicOrbit = interpOrbit(targeter, "FamilyData/CR3BPEM$(family)s.csv", "JC", JC)
+    (_, _, _, q0s::Matrix{Float64}) = getTrajStates(env, orbit, mf_out)
+
+    MATLAB.put_variable(mf_out, :orbitIC, orbit.initialCondition)
+    MATLAB.put_variable(mf_out, :orbitP, orbit.period)
+
+    assistTrajEscapeCR3BP(env, JC, q0s[:,idx], qEarths, qMoonPros, qMoonRetros, flagEarths, flagMoonPros, flagMoonRetros, volFiles, mf_out)
+
     MATLAB.close(mf_out)
 end
 
