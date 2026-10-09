@@ -3,7 +3,7 @@ Script for computing CR3BP escape trajectories in the Earth-Moon system
 
 Author: Jonathan LeFevre Richmond
 C: 6/16/26
-U: 10/8/26
+U: 10/9/26
 """
 
 module EscCR3BP
@@ -210,22 +210,19 @@ function isInterior(q::AbstractVector{Float64}, mu::Float64, rE::AbstractVector{
     dOmegadx::Float64 = q[1]-(1-mu)*(q[1]+mu)/r1^3-mu*(q[1]-1+mu)/r2^3
     dOmegady::Float64 = q[2]-(1-mu)*q[2]/r1^3-mu*q[2]/r2^3
 
-    # interiorE::Bool = ((q[1]-rE[1])*dOmegadx+q[2]*dOmegady) <= 0.0
-    # interiorM::Bool = ((q[1]-rM[1])*dOmegadx+q[2]*dOmegady) <= 0.0
+    interiorE::Bool = ((q[1]-rE[1])*dOmegadx+q[2]*dOmegady) <= 0.0
+    interiorM::Bool = ((q[1]-rM[1])*dOmegadx+q[2]*dOmegady) <= 0.0
 
-    # return (interiorE || interiorM)
-
-    return q[1]*dOmegadx+q[2]*dOmegady <= 0.0
+    return (interiorE || interiorM)
 end
 
 function getGrid(env::EscEnv, n::Int64, primary::Int64)
     if primary == 2
-        # radius::Float64 = 0.3
-        radius::Float64 = 0.2
+        radius::Float64 = 0.3
+        # radius::Float64 = 0.2
         center::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, primary)[1:2]
     else
-        # radius = 1.2
-        radius = 1.0
+        radius = 1.2
         center = [0.0, 0.0]
     end
 
@@ -237,9 +234,7 @@ function getGrid(env::EscEnv, n::Int64, primary::Int64)
     rE::StaticArrays.SVector{2, Float64} = StaticArrays.SVector{2, Float64}(getPrimaryState(env.EMDynamicsModel, 1)[1:2])
     rM::StaticArrays.SVector{2, Float64} = StaticArrays.SVector{2, Float64}(getPrimaryState(env.EMDynamicsModel, 2)[1:2])
     
-    lunarMask::BitMatrix = LinearAlgebra.norm.(rRect .- Ref(rM)) .> env.MoonHill_EM
-    # mask::Matrix{Bool} = isInterior.(rRect, mu, Ref(rE), Ref(rM))
-    mask::Matrix{Bool} = (primary == 2) ? .~lunarMask : (lunarMask .& isInterior.(rRect, mu, Ref(rE), Ref(rM)))
+    mask::Matrix{Bool} = isInterior.(rRect, mu, Ref(rE), Ref(rM))
 
     rGrid::Vector{StaticArrays.SVector{2, Float64}} = rRect[mask]
 
