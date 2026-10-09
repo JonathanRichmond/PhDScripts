@@ -3,7 +3,7 @@ Export utility functions
 
 Author: Jonathan LeFevre Richmond
 C: 2/19/25
-U: 9/4/26
+U: 10/9/26
 """
 
 using MBD, CSV, DataFrames, DifferentialEquations, LinearAlgebra, MATLAB, StaticArrays
@@ -1014,8 +1014,8 @@ Export BCR4BP apse map data to MAT file
 """
 function exportBCR4BPApseMap(dynamicsModel::MBD.BCR4BP12DynamicsModel, primary::Int64, apse::Symbol, grade::Symbol, JC::Float64, thetaS::Float64, qGrid::Vector{StaticArrays.MVector{7, Float64}}, flags::Vector{Int64}, count::Vector{Int64}, periapses::Vector{StaticArrays.SVector{7, Float64}}, periapsesIndices::Vector{Int64}, apoapses::Vector{StaticArrays.SVector{7, Float64}}, apoapsesIndices::Vector{Int64}, file::MATLAB.MatFile, name::Symbol)
     q::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), qGrid))
-    periapsesMat::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), periapses))
-    apoapsesMat::Matrix{Float64} = reduce(hcat, map(q -> Vector(q), apoapses))
+    periapsesMat::Matrix{Float64} = Matrix{Float64}(reinterpret(reshape, Float64, periapses))
+    apoapsesMat::Matrix{Float64} = Matrix{Float64}(reinterpret(reshape, Float64, apoapses))
     apseMap = BCR4BPApseMap(dynamicsModel, primary, apse, grade, JC, thetaS, q, flags, count, periapsesMat, periapsesIndices, apoapsesMat, apoapsesIndices)
     MATLAB.put_variable(file, name, apseMap)
 end

@@ -3,7 +3,7 @@ Script for computing BCR4BP escape trajectories in the Earth-Moon system
 
 Author: Jonathan LeFevre Richmond
 C: 8/12/26
-U: 8/26/26
+U: 10/9/26
 """
 
 module EscBCR4BP
@@ -45,12 +45,16 @@ function endAffect!(integrator, index)
     if idx == 1
         if (index[idx] == 1)
             integrator.p[2][1].count += 1
-            push!(integrator.p[2][1].states, copy(integrator.u))
-            push!(integrator.p[2][1].times, copy(integrator.t))
+            if integrator.p[10]
+                push!(integrator.p[2][1].states, copy(integrator.u))
+                push!(integrator.p[2][1].times, copy(integrator.t))
+            end
         elseif index[idx] == -1
             integrator.p[2][2].count += 1
-            push!(integrator.p[2][2].states, copy(integrator.u))
-            push!(integrator.p[2][2].times, copy(integrator.t))
+            if integrator.p[10]
+                push!(integrator.p[2][2].states, copy(integrator.u))
+                push!(integrator.p[2][2].times, copy(integrator.t))
+            end
         end
     else
         integrator.p[2][idx+1].count += 1
@@ -104,15 +108,18 @@ function isInterior(q::AbstractVector{Float64}, mu::Float64, rE::AbstractVector{
     dOmegadx::Float64 = q[1]-(1-mu)*(q[1]+mu)/r1^3-mu*(q[1]-1+mu)/r2^3
     dOmegady::Float64 = q[2]-(1-mu)*q[2]/r1^3-mu*q[2]/r2^3
 
-    return q[1]*dOmegadx+q[2]*dOmegady <= 0
+    interiorE::Bool = ((q[1]-rE[1])*dOmegadx+q[2]*dOmegady) <= 0.0
+    interiorM::Bool = ((q[1]-rM[1])*dOmegadx+q[2]*dOmegady) <= 0.0
+
+    return (interiorE || interiorM)
 end
 
 function getGrid(env::EscEnv, n::Int64, primary::Int64)
     if primary == 2
-        radius::Float64 = 0.2
+        radius::Float64 = 0.3
         center::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, primary)[1:2]
     else
-        radius = 1.0
+        radius = 1.2
         center = [0.0, 0.0]
     end
 
@@ -124,8 +131,7 @@ function getGrid(env::EscEnv, n::Int64, primary::Int64)
     rE::StaticArrays.SVector{2, Float64} = StaticArrays.SVector{2, Float64}(getPrimaryState(env.EMDynamicsModel, 1)[1:2])
     rM::StaticArrays.SVector{2, Float64} = StaticArrays.SVector{2, Float64}(getPrimaryState(env.EMDynamicsModel, 2)[1:2])
     
-    lunarMask::BitMatrix = LinearAlgebra.norm.(rRect .- Ref(rM)) .> env.MoonHill_EM
-    mask::Matrix{Bool} = (primary == 2) ? .~lunarMask : (lunarMask .& isInterior.(rRect, mu, Ref(rE), Ref(rM)))
+    mask::Matrix{Bool} = isInterior.(rRect, mu, Ref(rE), Ref(rM))
 
     rGrid::Vector{StaticArrays.SVector{2, Float64}} = rRect[mask]
 
@@ -175,7 +181,7 @@ function computeApseStates(env::EscEnv, primary::Int64, JC::Float64, thetaS::Flo
     return qGrid
 end
 
-function countApses(env::EscEnv, primary::Int64, apse::Symbol, IC::AbstractVector{Float64})
+function countApses(env::EscEnv, primary::Int64, apse::Symbol, IC::AbstractVector{Float64}, apses::Bool)
     peri = MBD.EventTracker(0, :peri, [], [])
     apo = MBD.EventTracker(0, :apo, [], [])
     escape = MBD.EventTracker(0, :escape, [], [])
@@ -184,13 +190,13 @@ function countApses(env::EscEnv, primary::Int64, apse::Symbol, IC::AbstractVecto
     center::Vector{Float64} = (primary == 0 ? zeros(Float64, 3) : getPrimaryState(env.EMDynamicsModel, primary)[1:3])
     r_Earth::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 1)[1:3]
     r_Moon::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 2)[1:3]
-    params::Vector{Any} = [apse, center, r_Earth, r_Moon, env.EarthHill_EM, env.EarthRadius_EM, env.MoonRadius_EM, primary]
+    params::Vector{Any} = [apse, center, r_Earth, r_Moon, env.EarthHill_EM, env.EarthRadius_EM, env.MoonRadius_EM, apses]
     (_, eventTrackers::Vector{EventTracker}) = propagateWithEvents(env.propagator, env.endEvents, Vector(IC), [0, 12.0*pi], env.EMSDynamicsModel, [peri, apo, escape, crashEarth, crashMoon], params)
     
     return eventTrackers
 end
 
-function apseMapBCR4BP(env::EscEnv, JC::Float64, thetaS::Float64, primary::Int64, rGrid::Vector{StaticArrays.SVector{2, Float64}}, mf::MATLAB.MatFile; apse::Symbol = :peri, grade::Symbol = :pro)
+function apseMapBCR4BP(env::EscEnv, JC::Float64, thetaS::Float64, primary::Int64, rGrid::Vector{StaticArrays.SVector{2, Float64}}, mf::MATLAB.MatFile; apse::Symbol = :peri, grade::Symbol = :pro, apses::Bool = true)
     qGrid::Vector{StaticArrays.MVector{7, Float64}} = computeApseStates(env, primary, JC, thetaS, apse, grade, rGrid)
 
     flags::Vector{Int64} = fill(9, size(qGrid))
@@ -203,7 +209,7 @@ function apseMapBCR4BP(env::EscEnv, JC::Float64, thetaS::Float64, primary::Int64
     apoapses::Vector{Vector{StaticArrays.SVector{7, Float64}}} = [StaticArrays.SVector{7, Float64}[] for _ in qGrid]
     println("Propagating $(length(qProp)) CR3BP trajectories with $(Threads.nthreads()) threads...")
     Threads.@threads for j in eachindex(qProp)
-        eventTrackers::Vector{MBD.EventTracker} = countApses(env, primary, apse, qProp[j])
+        eventTrackers::Vector{MBD.EventTracker} = countApses(env, primary, apse, qProp[j], apses)
         apsesCount::Int64 = (apse == :peri ? eventTrackers[1].count : eventTrackers[2].count)
         if (eventTrackers[4].count != 0) || (eventTrackers[5].count != 0)
             flags[qMap[j]] = 7
@@ -213,8 +219,10 @@ function apseMapBCR4BP(env::EscEnv, JC::Float64, thetaS::Float64, primary::Int64
             flags[qMap[j]] = 6
         end
         counts[qMap[j]] = apsesCount
-        periapses[qMap[j]] = map(q -> StaticArrays.SVector{7, Float64}(q), eventTrackers[1].states)
-        apoapses[qMap[j]] = map(q -> StaticArrays.SVector{7, Float64}(q), eventTrackers[2].states)
+        if apses
+            periapses[qMap[j]] = map(q -> StaticArrays.SVector{7, Float64}(q), eventTrackers[1].states)
+            apoapses[qMap[j]] = map(q -> StaticArrays.SVector{7, Float64}(q), eventTrackers[2].states)
+        end
     end
 
     flagCounts::Vector{Int64} = [count(==(f), flags) for f in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]]
@@ -225,28 +233,33 @@ function apseMapBCR4BP(env::EscEnv, JC::Float64, thetaS::Float64, primary::Int64
     println("\tInvalid apses:\t$(flagCounts[9])")
     println("\tZVCs:\t\t$(flagCounts[10])")
 
-    println("Exporting map...")
-    validPeri::Vector{Int64} = findall(!isempty, periapses)
-    validApo::Vector{Int64} = findall(!isempty, apoapses)
-    periStates::Vector{StaticArrays.SVector{7, Float64}} = reduce(vcat, periapses[validPeri])
-    periIndices::Vector{Int64} = reduce(vcat, [fill(idx, length(periapses[idx])) for idx in validPeri])
-    apoStates::Vector{StaticArrays.SVector{7, Float64}} = reduce(vcat, apoapses[validApo])
-    apoIndices::Vector{Int64} = reduce(vcat, [fill(idx, length(apoapses[idx])) for idx in validApo])
-    exportBCR4BPApseMap(env.EMSDynamicsModel, primary, apse, grade, JC, thetaS, qGrid, flags, counts, periStates, periIndices, apoStates, apoIndices, mf, Symbol("map_", replace(string(JC), "." => "_"), "_", replace(string(round(thetaS*180.0/pi, digits = 1)), "." => "_")))
+    if apses
+        println("Exporting map with apses...")
+        validPeri::Vector{Int64} = findall(!isempty, periapses)
+        validApo::Vector{Int64} = findall(!isempty, apoapses)
+        periStates::Vector{StaticArrays.SVector{7, Float64}} = [StaticArrays.SVector{7, Float64}(state) for idx in validPeri for state in periapses[idx]]
+        periIndices::Vector{Int64} = [idx for idx in validPeri for _ in 1:length(periapses[idx])]
+        apoStates::Vector{StaticArrays.SVector{7, Float64}} = [StaticArrays.SVector{7, Float64}(state) for idx in validApo for state in apoapses[idx]]
+        apoIndices::Vector{Int64} = [idx for idx in validApo for _ in 1:length(apoapses[idx])]
+        exportBCR4BPApseMap(env.EMSDynamicsModel, primary, apse, grade, JC, thetaS, qGrid, flags, counts, periStates, periIndices, apoStates, apoIndices, mf, Symbol("map_", replace(string(JC), "." => "_"), "_", replace(string(round(thetaS*180.0/pi, digits = 1)), "." => "_")))
+    else
+        println("Exporting map without apses...")
+        exportBCR4BPApseMap(env.EMSDynamicsModel, primary, apse, grade, JC, thetaS, qGrid, flags, counts, Vector{StaticArrays.SVector{7, Float64}}(), Vector{Int64}(), Vector{StaticArrays.SVector{7, Float64}}(), Vector{Int64}(), mf, Symbol("map_", replace(string(JC), "." => "_"), "_", replace(string(round(thetaS*180.0/pi, digits = 1)), "." => "_")))
+    end
 end
 
-function run_apseMapBCR4BP(JC::Float64, thetaS::Float64, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro)
+function run_apseMapBCR4BP(JC::Float64, thetaS::Float64, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro, apses::Bool = true)
     mf = MATLAB.MatFile("Output/ApseMaps/BCR4BP_$(string(primary))_$(string(apse))_$(string(grade))_$(string(n))_$(string(JC))_$(string(round(thetaS, digits = 3))).mat", "w")
         
     env::EscEnv = setupEnvironment()
 
     rGrid::Vector{StaticArrays.SVector{2, Float64}} = getGrid(env, n, primary)
-    apseMapBCR4BP(env, JC, thetaS, primary, rGrid, mf; apse = apse, grade = grade)
+    apseMapBCR4BP(env, JC, thetaS, primary, rGrid, mf; apse = apse, grade = grade, apses = apses)
     
     MATLAB.close(mf)
 end
 
-function run_apseMapsthetaBCR4BP(JC::Float64, thetaS::Vector{Float64}, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro)
+function run_apseMapsthetaBCR4BP(JC::Float64, thetaS::Vector{Float64}, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro, apses::Bool = false)
     mf = MATLAB.MatFile("Output/ApseMaps/BCR4BPthetaVolume_$(string(primary))_$(string(apse))_$(string(grade))_$(string(n))_$(string(JC)).mat", "w")
 
     env::EscEnv = setupEnvironment()
@@ -255,13 +268,13 @@ function run_apseMapsthetaBCR4BP(JC::Float64, thetaS::Vector{Float64}, n::Int64,
     o::Int64 = length(thetaS)
     for j::Int64 in eachindex(thetaS)
         println("\nProducing map $j / $o: theta = $(thetaS[j]*180.0/pi)...")
-        apseMapBCR4BP(env, JC, thetaS[j], primary, rGrid, mf; apse = apse, grade = grade)
+        apseMapBCR4BP(env, JC, thetaS[j], primary, rGrid, mf; apse = apse, grade = grade, apses = apses)
     end
 
     MATLAB.close(mf)
 end
 
-function run_apseMapsJCBCR4BP(JCs::Vector{Float64}, thetaS::Float64, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro)
+function run_apseMapsJCBCR4BP(JCs::Vector{Float64}, thetaS::Float64, n::Int64, primary::Int64; apse::Symbol = :peri, grade::Symbol = :pro, apses::Bool = false)
     mf = MATLAB.MatFile("Output/ApseMaps/BCR4BPJCVolume_$(string(primary))_$(string(apse))_$(string(grade))_$(string(n))_$(string(round(thetaS, digits = 3)))_$(string(minimum(JCs)))_$(string(maximum(JCs))).mat", "w")
 
     env::EscEnv = setupEnvironment()
@@ -270,7 +283,7 @@ function run_apseMapsJCBCR4BP(JCs::Vector{Float64}, thetaS::Float64, n::Int64, p
     o::Int64 = length(JCs)
     for j::Int64 in eachindex(JCs)
         println("\nProducing map $j / $o: JC = $(JCs[j])...")
-        apseMapBCR4BP(env, JCs[j], thetaS, primary, rGrid, mf; apse = apse, grade = grade)
+        apseMapBCR4BP(env, JCs[j], thetaS, primary, rGrid, mf; apse = apse, grade = grade, apses = apses)
     end
 
     MATLAB.close(mf)
