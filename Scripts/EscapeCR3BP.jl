@@ -3,7 +3,7 @@ Script for computing CR3BP escape trajectories in the Earth-Moon system
 
 Author: Jonathan LeFevre Richmond
 C: 6/16/26
-U: 10/9/26
+U: 10/14/26
 """
 
 module EscCR3BP
@@ -125,7 +125,7 @@ function isPerilune(EMDynamicsModel::MBD.CR3BPDynamicsModel, q::Vector{Float64},
     oe0::Vector{Float64} = getOrbitalElements(MDynamicsModel, Q0_MCI)
     E_M::Float64 = getEnergy(MDynamicsModel, oe0)
     
-    return (E_M < 0)
+    return (E_M < 0) || (q[1] > 1)
 end
 
 function trajAffect!(integrator, index)
@@ -401,13 +401,19 @@ function getEscapeEnergy(env::EscEnv, q0::Vector{Float64})
 end
 
 function getFlybyDeltav(env::EscEnv, q0::Vector{Float64})
+    mu::Float64 = getMassRatio(env.EMDynamicsModel)
     qE::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 1)
     qM::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 2)
     arc::MBD.CR3BPArc = propagateWithEvent(env.propagator, env.flybyEvent, q0, [0, 4.0*pi], env.EMDynamicsModel, [qM[1:3]])
     qf::Vector{Float64} = getStateByIndex(arc, -1)
-    vE::Vector{Float64} = [qf[4]-qf[2], qf[5]+qf[1]-qE[1], qf[6]]
+    v::Float64 = LinearAlgebra.norm(qf[4:6])
+    qf_E::Vector{Float64} = qf[1:6]-qE
+    r_E::Float64 = LinearAlgebra.norm(qf_E[1:3])
+    h::Float64 = (qf[1]+mu)*qf[5]-qf[2]*qf[4]
+    w::Float64 = v+h/v
+    d::Float64 = 2*(r_E^2+h)-getJacobiConstant(env.EMDynamicsModel, qf)
 
-    return sqrt(2*qM[1]/LinearAlgebra.norm(qf[1:3]-qE[1:3]))-LinearAlgebra.norm(vE)
+    return -w+sqrt(w^2-d)
 end
 
 function getEscapeManeuverEfficiencyMetric(v1::Float64, v2::Float64, Deltavs::Vector{Float64})
@@ -466,16 +472,24 @@ function getRadiusGradient(env::EscEnv, q0::Vector{Float64})
 end
 
 function getFlybyDeltavsGradient(env::EscEnv, q0::Vector{Float64}, alphaSign::Float64, betaSign::Float64)
-    muE::Float64 = 1.0-getMassRatio(env.EMDynamicsModel)
+    mu::Float64 = getMassRatio(env.EMDynamicsModel)
     qE::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 1)
     qM::Vector{Float64} = getPrimaryState(env.EMDynamicsModel, 2)
     arc::MBD.CR3BPArc = propagateWithEvent(env.propagator_STM, env.flybyEvent, appendExtraInitialConditions(env.EMDynamicsModel, q0, MBD.STM), [0, 4.0*pi], env.EMDynamicsModel, [qM[1:3]])
     qf::Vector{Float64} = getStateByIndex(arc, -1)
+    v::Float64 = LinearAlgebra.norm(qf[4:6])
     qf_E::Vector{Float64} = qf[1:6]-qE
     qf_M::Vector{Float64} = qf[1:6]-qM
-    vE::Vector{Float64} = [qf[4]-qf[2], qf[5]+qf[1]-qE[1], qf[6]]
-    vInf::Float64 = sqrt(2*muE/LinearAlgebra.norm(qf_E[1:3]))
-    dDeltav2dqp::Matrix{Float64} = hcat(-0.5*(vInf/LinearAlgebra.norm(qf_E[1:3])^2) .* qf_E[1:3]'-(1/LinearAlgebra.norm(vE)) .* [vE[2], -vE[1], 0.0]', -(1/LinearAlgebra.norm(vE)) .* vE')
+    r_E::Float64 = LinearAlgebra.norm(qf_E[1:3])
+    r_M::Float64 = LinearAlgebra.norm(qf_M[1:3])
+    dUdx::Float64 = qf[1]-(1-mu)*(qf[1]+mu)/r_E^3-mu*(qf[1]-1+mu)/r_M^3
+    dUdy::Float64 = qf[2]-(1-mu)*qf[2]/r_E^3-mu*qf[2]/r_M^3
+    h::Float64 = (qf[1]+mu)*qf[5]-qf[2]*qf[4]
+    w::Float64 = v+h/v
+    d::Float64 = 2*(r_E^2+h)-getJacobiConstant(env.EMDynamicsModel, qf)
+    dwdqp::Matrix{Float64} = (1/v).*reshape([qf[5], -qf[4], 0.0, 2*qf[4]-qf[2]-w*qf[4]/v, 2*qf[5]+qf[1]+mu-w*qf[5]/v, 0.0], (1,6))
+    dddqp::Matrix{Float64} = 2 .* reshape([2*qf[1]+2*mu+qf[5]-dUdx, 2*qf[2]-qf[4]-dUdy, 0.0, qf[4]-qf[2], qf[5]+qf[1]+mu, 0.0], (1,6))
+    dDeltav2dqp::Matrix{Float64} = (w/sqrt(w^2-d)-1)*dwdqp-(1/(2*sqrt(w^2-d)))*dddqp
     dqpdq0::Matrix{Float64} = getStateTransitionMatrix(env.EMDynamicsModel, qf)
     dq0dv0::Matrix{Float64} = [zeros(Float64, (3,3)); LinearAlgebra.I]
     qfdot::Vector{Float64} = zeros(Float64, 6)
@@ -784,11 +798,20 @@ function trajOptimizeForFlyby(env::EscEnv, JC::Float64, q::Vector{Float64}, qs::
     JCRange::Vector{Float64} = [3.18, 2.8]
     (volJCs::Vector{Float64}, _, volqs::Array{Float64, 3}) = pruneVolumeData(JCRange, [idxClosest], volFileName)
     (_, JCNew::Float64) = optimizeForFlyby(env, JC, qClosest, volJCs, dropdims(volqs, dims = 2))
-    r::Vector{Float64} = q[1:2]
-    vMag::Float64 = computeApseVelocities(env, JCNew, [StaticArrays.SVector{2, Float64}(r)])[1]
-    Deltav::Float64 = vMag-sqrt(q[4]^2+q[5]^2)
+    (Deltav::Float64, flag::Int64) = updateTrajectory(env, JCNew, 1, q)
+    JCNewIdx::Int64 = findfirst(x -> x-JCNew < 1E-5, volJCs)
+    iter::Int64 = 0
+    step::Int64 = JCNew < JC ? -1 : 1
+    while (flag > 5) && (JCNewIdx > 1)
+        JCNewIdx += step
+        !(1 <= JCNewIdx <= length(volJCs)) && break
+        JCNew = volJCs[JCNewIdx]
+        (step*JCNew <= step*JC) && break
+        (Deltav, flag) = updateTrajectory(env, JCNew, 1, q)
+        iter += 1
+    end
 
-    return (Deltav, JCNew)
+    (flag > 5) ? (return (0.0, JC)) : (return (Deltav, JCNew))
 end
 
 function updateTrajectory(env::EscEnv, JC::Float64, primary::Int64, q::Vector{Float64})
@@ -901,7 +924,7 @@ function escapeAnalysisCR3BP(env::EscEnv, JC::Float64, primary::Int64, apse::Sym
                 Deltav2s[escIdx] = sqrt(q[4]^2+q[5]^2)-vs[idx]
                 (_, escvs[escIdx]) = getEscapeEnergy(env, q)
                 Deltav3s[escIdx] = getFlybyDeltav(env, q)
-                totalDeltavs[escIdx] = Deltav2s[escIdx]+Deltav3s[escIdx]
+                totalDeltavs[escIdx] = abs(Deltav2s[escIdx])+abs(Deltav3s[escIdx])
                 grads[escIdx] = getFlybyDeltavsGradient(env, q, 0.0, sign(Deltav3s[escIdx]))
                 gammas[escIdx] = getEscapeManeuverEfficiencyMetric(escvOld, escvs[escIdx], [Deltav2s[escIdx]] .* env.charValues.EM.lstar ./ env.charValues.EM.tstar)
             end
@@ -1013,8 +1036,6 @@ function assistedEscapeAnalysisCR3BP(env::EscEnv, JC::Float64, primary::Int64, a
         if apse == :peri
             if (flags[idx] == 0)
                 if maneuver == 2
-                    (Deltav2s[idx], JCNews[idx]) = optimizeForTransit(env, JC, primary, qTraj, volJCs, volFlags[:,j], volqs[:,j,:])
-                elseif maneuver == 3
                     (Deltav2s[idx], JCNews[idx]) = optimizeForFlyby(env, JC, qTraj, volJCs, volqs[:,j,:])
                 end
             elseif (0 < flags[idx] < 6)
@@ -1323,9 +1344,9 @@ function assistTrajEscapeCR3BP(env::EscEnv, JC::Float64, q0::Vector{Float64}, qE
         println("Perilune? $periluneBool")
         tPeri0 = getTimeByIndex(traj0Arc, -1)
         if !periluneBool
-            (_, _, flagClosest::Int64) = findClosestFlagBias(qPeri0, qEarths, flagEarths)
-            println("First flag: $flagClosest")
-            if flagClosest == 6
+            (_, flag0::Int64) = updateTrajectory(env, JC, 1, qPeri0)
+            println("First flag: $flag0")
+            if flag0 > 5
                 apseTrackers1::Vector{MBD.EventTracker} = countApses(env, 1, :peri, qPeri0, true)
                 periapses1::Vector{Vector{Float64}} = append!([qPeri0], apseTrackers1[1].states)
                 periapsesTimes1::Vector{Float64} = append!([0.0], apseTrackers1[1].times)
@@ -1358,23 +1379,23 @@ function assistTrajEscapeCR3BP(env::EscEnv, JC::Float64, q0::Vector{Float64}, qE
                 qPeri1 = q1s[filt[bestIdx]]
                 tPeri1 = t1s[filt[bestIdx]]
                 JC1 = JC1s[filt[bestIdx]]
-                flagClosest = flag1s[filt[bestIdx]]
-                println("Delta-v 1: $(Deltav1*1000*env.charValues.EM.lstar/env.charValues.EM.tstar) m/s")
-                println("Second JC: $JC1")
-                println("Second flag: $flagClosest")
+                flag0 = flag1s[filt[bestIdx]]
             else
                 Deltav1 = 0.0
                 qPeri1 = copy(qPeri0)
                 tPeri1 = 0.0
                 JC1 = copy(JC)
             end
+            println("Delta-v 1: $(Deltav1*1000*env.charValues.EM.lstar/env.charValues.EM.tstar) m/s")
+            println("Second JC: $JC1")
+            println("Second flag: $flag0")
             (escE1::Float64, escv1::Float64) = getEscapeEnergy(env, qPeri1)
             println("Escape energy 1: $escE1")
             println("Escape velocity 1: $escv1")
             depq1::Vector{Float64} = getEscapeState(env, qPeri1)
             depv1::Float64 = LinearAlgebra.norm(depq1[4:6])
             println("Escape velocity (rot) 1: $(depv1*env.charValues.EM.lstar/env.charValues.EM.tstar)")
-            if (flagClosest >= 0) && (flagClosest < 6)
+            if (flag0 >= 0) && (flag0 < 6)
                 apseTrackers2::Vector{MBD.EventTracker} = countApses(env, 1, :peri, qPeri1, true)
                 periapses2::Vector{Vector{Float64}} = append!([qPeri1], apseTrackers2[1].states)
                 periapsesTimes2::Vector{Float64} = append!([0.0], apseTrackers2[1].times)
@@ -1385,14 +1406,14 @@ function assistTrajEscapeCR3BP(env::EscEnv, JC::Float64, q0::Vector{Float64}, qE
                 vMag = LinearAlgebra.norm(qPeriEsc[4:6])
                 vhat = qPeriEsc[4:6]./vMag
                 qPeri2 = append!(qPeriEsc[1:3], (vMag+Deltav2) .* vhat)
-                println("Delta-v 2: $(Deltav2*1000*env.charValues.EM.lstar/env.charValues.EM.tstar) m/s")
-                println("Third JC: $JC2")
             else
                 Deltav2 = 0.0
                 qPeri2 = copy(qPeri1)
                 tPeri2 = 0.0
                 JC2 = copy(JC1)
             end
+            println("Delta-v 2: $(Deltav2*1000*env.charValues.EM.lstar/env.charValues.EM.tstar) m/s")
+            println("Third JC: $JC2")
             (escE2::Float64, escv2::Float64) = getEscapeEnergy(env, qPeri2)
             println("Escape energy 2: $escE2")
             println("Escape velocity 2: $escv2")
@@ -1407,12 +1428,15 @@ function assistTrajEscapeCR3BP(env::EscEnv, JC::Float64, q0::Vector{Float64}, qE
         periapses3::Vector{Vector{Float64}} = apseTrackers3[1].states
         periapsesTimes3::Vector{Float64} = apseTrackers3[1].times
         qFlyby::Vector{Float64} = periapses3[1]
+        dFlyby::Float64 = getExcursion(env.EMDynamicsModel, 2, qFlyby)
+        println("Flyby altitude: $(dFlyby-env.primaries[2].bodyRadius) km")
         Deltav3 = getFlybyDeltav(env, qPeri2)
-        vE::Vector{Float64} = [qFlyby[4]-qFlyby[2], qFlyby[5]+qFlyby[1]-getPrimaryState(env.EMDynamicsModel, 1)[1], qFlyby[6]]
-        uhat::Vector{Float64} = vE./LinearAlgebra.norm(vE)
-        qPeri3 = append!(qFlyby[1:3], qFlyby[4:6]+Deltav3 .* uhat)
+        vMag = LinearAlgebra.norm(qFlyby[4:6])
+        vhat = qFlyby[4:6]./vMag
+        qPeri3 = append!(qFlyby[1:3], (vMag+Deltav3) .* vhat)
         tPeri3 = periapsesTimes3[1]
         println("Delta-v 3: $(Deltav3*1000*env.charValues.EM.lstar/env.charValues.EM.tstar) m/s")
+        println("Third JC: $(getJacobiConstant(env.EMDynamicsModel, qPeri3))")
         (escE3::Float64, escv3::Float64) = getEscapeEnergy(env, qPeri3)
         println("Escape energy 3: $escE3")
         println("Escape velocity 3: $escv3")
@@ -1621,7 +1645,7 @@ function run_assistOrbitEscapeCR3BP(family::String, JC::Float64, mapName::String
     qMoonRetros::Matrix{Float64} = map_perilune_retro["q"]
     flagMoonRetros::Vector{Int64} = map_perilune_retro["flags"]
 
-    volFiles::Vector{String} = ["../PhDMATLABScripts/CR3BPJCVolume_1_peri_pro_500_2.9_3.17.mat", "../PhDMATLABScripts/CR3BPJCVolume_2_peri_pro_500_2.9_3.17.mat", "../PhDMATLABScripts/CR3BPJCVolume_2_peri_retro_500_2.9_3.17.mat"]
+    volFiles::Vector{String} = ["../PhDMATLABScripts/CR3BPJCVolume_1_peri_pro_500_2.9_3.17_new.mat", "../PhDMATLABScripts/CR3BPJCVolume_2_peri_pro_500_2.9_3.17.mat", "../PhDMATLABScripts/CR3BPJCVolume_2_peri_retro_500_2.9_3.17.mat"]
 
     mf_out = MATLAB.MatFile("Output/AssistOrbitEscapeCR3BP.mat", "w")
 

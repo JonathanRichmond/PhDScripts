@@ -207,7 +207,7 @@ function apseMapBCR4BP(env::EscEnv, JC::Float64, thetaS::Float64, primary::Int64
     counts::Vector{Int64} = zeros(Int64, size(qGrid))
     periapses::Vector{Vector{StaticArrays.SVector{7, Float64}}} = [StaticArrays.SVector{7, Float64}[] for _ in qGrid]
     apoapses::Vector{Vector{StaticArrays.SVector{7, Float64}}} = [StaticArrays.SVector{7, Float64}[] for _ in qGrid]
-    println("Propagating $(length(qProp)) CR3BP trajectories with $(Threads.nthreads()) threads...")
+    println("Propagating $(length(qProp)) BCR4BP trajectories with $(Threads.nthreads()) threads...")
     Threads.@threads for j in eachindex(qProp)
         eventTrackers::Vector{MBD.EventTracker} = countApses(env, primary, apse, qProp[j], apses)
         apsesCount::Int64 = (apse == :peri ? eventTrackers[1].count : eventTrackers[2].count)
