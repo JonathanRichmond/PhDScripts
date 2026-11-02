@@ -3,7 +3,7 @@ Script for computing CR3BP escape trajectories in the Earth-Moon system
 
 Author: Jonathan LeFevre Richmond
 C: 6/16/26
-U: 10/19/26
+U: 10/29/26
 """
 
 module EscCR3BP
@@ -1035,12 +1035,12 @@ function assistedEscapeAnalysisCR3BP(env::EscEnv, JC::Float64, primary::Int64, a
     Threads.@threads for j::Int64 in eachindex(indices)
         idx::Int64 = indices[j]
         qTraj::Vector{Float64} = qs[:,idx]
-        if (primary != 2) && (qTraj[1] > getEquilibriumPoint(env.EMDynamicsModel, 1)[1])
-            continue
-        end
         if apse == :peri
             if (flags[idx] == 0)
                 if maneuver == 2
+                    if (primary != 2) && (qTraj[1] > getEquilibriumPoint(env.EMDynamicsModel, 1)[1])
+                        continue
+                    end
                     (Deltav2s[idx], JCNews[idx]) = optimizeForFlyby(env, JC, qTraj, volJCs, volqs[:,j,:])
                 end
             elseif (0 < flags[idx] < 6)
